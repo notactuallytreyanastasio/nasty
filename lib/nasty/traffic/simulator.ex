@@ -48,7 +48,7 @@ defmodule Nasty.Traffic.Simulator do
 
   defp schedule_simulation do
     # Add some randomness to the interval
-    variance = :rand.uniform(5000)
+    variance = :rand.uniform(1000)
     Process.send_after(self(), :simulate, @simulation_interval + variance)
   end
 end
