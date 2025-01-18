@@ -1,0 +1,64 @@
+<div class="min-h-screen bg-black text-green-400 font-mono p-4">
+  <div class="sticky top-0 bg-black border-b border-green-400 p-4 mb-8 z-10">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="font-bold">root@bookmarks:</span>
+      <span class="text-blue-400">~/add-bookmark</span>
+      <span class="animate-pulse">$</span>
+    </div>
+
+    <.form for={@form} phx-submit="save" class="space-y-2">
+      <div class="grid gap-2">
+        <.input field={@form[:url]} type="text" placeholder="url://"
+          class="w-full bg-black border border-green-400 text-green-400 p-2 focus:outline-none focus:border-blue-400" />
+        <.input field={@form[:title]} type="text" placeholder="title://"
+          class="w-full bg-black border border-green-400 text-green-400 p-2 focus:outline-none focus:border-blue-400" />
+        <.input field={@form[:description]} type="text" placeholder="desc://"
+          class="w-full bg-black border border-green-400 text-green-400 p-2 focus:outline-none focus:border-blue-400" />
+        <.input field={@form[:tags]} type="text" placeholder="tags:// (comma-separated)"
+          class="w-full bg-black border border-green-400 text-green-400 p-2 focus:outline-none focus:border-blue-400" />
+        <label class="flex items-center gap-2">
+          <.input field={@form[:public]} type="checkbox"
+            class="appearance-none w-4 h-4 border border-green-400 bg-black checked:bg-green-400 cursor-pointer" />
+          <span>public://</span>
+        </label>
+        <.button class="w-full bg-green-400 text-black font-bold py-2 hover:bg-blue-400 transition-colors">
+          save://
+        </.button>
+      </div>
+    </.form>
+  </div>
+
+  <div class="space-y-8">
+    <%= for {tag, bookmarks} <- @bookmarks_by_tag do %>
+      <div class="border border-green-400 p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="font-bold">root@bookmarks:</span>
+          <span class="text-blue-400">~/tags/<%= tag %></span>
+          <span class="animate-pulse">$</span>
+          <span class="text-gray-500">(<%= length(bookmarks) %>)</span>
+        </div>
+
+        <div class="ml-8 space-y-4">
+          <%= for bookmark <- bookmarks do %>
+            <div class="border-l-2 border-green-400 pl-4">
+              <div class="flex items-center justify-between">
+                <a href={bookmark.url} target="_blank" class="text-blue-400 font-bold hover:underline">
+                  <%= bookmark.title %>
+                </a>
+                <span class={[
+                  "text-sm",
+                  bookmark.public && "text-green-400",
+                  !bookmark.public && "text-red-500"
+                ]}>
+                  <%= if bookmark.public, do: "public://", else: "private://" %>
+                </span>
+              </div>
+              <div class="text-gray-500 my-1"><%= bookmark.description %></div>
+              <div class="text-gray-600 text-sm"><%= bookmark.url %></div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>

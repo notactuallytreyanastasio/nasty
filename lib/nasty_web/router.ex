@@ -68,6 +68,7 @@ defmodule NastyWeb.Router do
       on_mount: [{NastyWeb.UserAuth, :ensure_authenticated}] do
       live "/users/settings", UserSettingsLive, :edit
       live "/users/settings/confirm_email/:token", UserSettingsLive, :confirm_email
+      live "/bookmarks", BookmarkLive, :index
     end
   end
 
@@ -81,5 +82,11 @@ defmodule NastyWeb.Router do
       live "/users/confirm/:token", UserConfirmationLive, :edit
       live "/users/confirm", UserConfirmationInstructionsLive, :new
     end
+  end
+
+  scope "/", NastyWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    live "/bookmarks", BookmarkLive, :index
   end
 end
