@@ -17,12 +17,20 @@ defmodule Nasty.Application do
       # Start to serve requests, typically the last entry
       NastyWeb.Endpoint,
       Nasty.Bookmarks.Cache
-    ]
+    ] ++ simulation_children()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Nasty.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp simulation_children do
+    if Application.get_env(:nasty, :simulate_traffic) do
+      [Nasty.Traffic.Simulator]
+    else
+      []
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration
