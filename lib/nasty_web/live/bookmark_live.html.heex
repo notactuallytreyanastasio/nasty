@@ -16,75 +16,69 @@
       </div>
 
       <div class="space-y-6">
-        <%= for bookmark <- @bookmarks do %>
-          <div class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300">
-            <div class="flex items-center justify-between gap-4">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-baseline justify-between gap-4">
-                  <a href={bookmark.url} target="_blank"
-                    class="text-fuchsia-400 font-bold text-lg hover:text-cyan-400 transition-colors duration-300 truncate">
-                    <%= bookmark.title %>
-                  </a>
-                  <span class={[
-                    "text-sm px-2 py-1 rounded-md whitespace-nowrap",
-                    bookmark.public && "text-cyan-400 border border-cyan-500",
-                    !bookmark.public && "text-fuchsia-400 border border-fuchsia-500"
-                  ]}>
-                  </span>
-                </div>
-                <%= if bookmark.description do %>
-                  <p class="text-cyan-600 mt-2 text-sm"><%= bookmark.description %></p>
-                <% end %>
-                <div class="text-cyan-700 text-sm font-bold mt-1 truncate"><%= bookmark.url %></div>
-                <div class="flex flex-wrap gap-2 mt-3">
-                  <%= for tag <- bookmark.tags do %>
-                    <span class="text-xs text-cyan-600 border border-cyan-700 px-2 py-1 rounded-md">
-                      <%= tag.name %>
-                    </span>
-                  <% end %>
-                </div>
+        <div :for={bookmark <- @bookmarks} class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-baseline justify-between gap-4">
+                <.link href={bookmark.url} target="_blank"
+                  class="text-fuchsia-400 font-bold text-lg hover:text-cyan-400 transition-colors duration-300 truncate">
+                  {bookmark.title}
+                </.link>
+                <span class={[
+                  "text-sm px-2 py-1 rounded-md whitespace-nowrap",
+                  bookmark.public && "text-cyan-400 border border-cyan-500",
+                  !bookmark.public && "text-fuchsia-400 border border-fuchsia-500"
+                ]}>
+                </span>
+              </div>
+              <p :if={bookmark.description} class="text-cyan-600 mt-2 text-sm">
+                {bookmark.description}
+              </p>
+              <div class="text-cyan-700 text-sm font-bold mt-1 truncate">{bookmark.url}</div>
+              <div class="flex flex-wrap gap-2 mt-3">
+                <span :for={tag <- bookmark.tags} class="text-xs text-cyan-600 border border-cyan-700 px-2 py-1 rounded-md">
+                  {tag.name}
+                </span>
               </div>
             </div>
           </div>
-        <% end %>
+        </div>
       </div>
     </div>
   </div>
 
-  <%= if @show_modal do %>
-    <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div class="bg-black border-2 border-cyan-500 p-6 max-w-4xl w-full mx-4 relative">
-        <button phx-click="close-modal" class="absolute top-4 right-4 text-cyan-500 hover:text-fuchsia-500">
-          <span class="text-xl">[x]</span>
-        </button>
+  <div :if={@show_modal} class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div class="bg-black border-2 border-cyan-500 p-6 max-w-4xl w-full mx-4 relative">
+      <button phx-click="close-modal" class="absolute top-4 right-4 text-cyan-500 hover:text-fuchsia-500">
+        <span class="text-xl">[x]</span>
+      </button>
 
-        <div class="flex items-center gap-2 mb-4">
-          <span class="font-bold text-cyan-400">root@bookmarks:</span>
-          <span class="text-fuchsia-400">~/add-bookmark</span>
-          <span class="animate-pulse text-cyan-500">$</span>
-        </div>
-
-        <.form for={@form} phx-submit="save" class="space-y-4">
-          <div class="grid gap-3">
-            <.input field={@form[:url]} type="text" placeholder="url://"
-              class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
-            <.input field={@form[:title]} type="text" placeholder="title://"
-              class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
-            <.input field={@form[:description]} type="text" placeholder="desc://"
-              class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
-            <.input field={@form[:tags]} type="text" placeholder="tags:// (comma-separated)"
-              class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
-            <label class="flex items-center gap-2 text-cyan-400">
-              <.input field={@form[:public]} type="checkbox"
-                class="appearance-none w-4 h-4 border-2 border-cyan-500 bg-black/50 checked:bg-fuchsia-500 cursor-pointer" />
-              <span>public://</span>
-            </label>
-            <.button class="w-full bg-cyan-500 hover:bg-fuchsia-500 text-black font-bold py-2 transition-all duration-300 ease-in-out">
-              save://
-            </.button>
-          </div>
-        </.form>
+      <div class="flex items-center gap-2 mb-4">
+        <span class="font-bold text-cyan-400">root@bookmarks:</span>
+        <span class="text-fuchsia-400">~/add-bookmark</span>
+        <span class="animate-pulse text-cyan-500">$</span>
       </div>
+
+      <.form for={@form} phx-submit="save" class="space-y-4">
+        <div class="grid gap-3">
+          <.input field={@form[:url]} type="text" placeholder="url://"
+            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
+          <.input field={@form[:title]} type="text" placeholder="title://"
+            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
+          <.input field={@form[:description]} type="text" placeholder="desc://"
+            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
+          <.input field={@form[:tags]} type="text" placeholder="tags:// (comma-separated)"
+            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
+          <label class="flex items-center gap-2 text-cyan-400">
+            <.input field={@form[:public]} type="checkbox"
+              class="appearance-none w-4 h-4 border-2 border-cyan-500 bg-black/50 checked:bg-fuchsia-500 cursor-pointer" />
+            <span>public://</span>
+          </label>
+          <.button class="w-full bg-cyan-500 hover:bg-fuchsia-500 text-black font-bold py-2 transition-all duration-300 ease-in-out">
+            save://
+          </.button>
+        </div>
+      </.form>
     </div>
-  <% end %>
+  </div>
 </div>
