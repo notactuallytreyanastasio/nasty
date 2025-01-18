@@ -30,7 +30,6 @@
                     bookmark.public && "text-cyan-400 border border-cyan-500",
                     !bookmark.public && "text-fuchsia-400 border border-fuchsia-500"
                   ]}>
-                    <%= if bookmark.public, do: "public://", else: "private://" %>
                   </span>
                 </div>
                 <%= if bookmark.description do %>

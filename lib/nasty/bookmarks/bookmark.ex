@@ -18,7 +18,7 @@ defmodule Nasty.Bookmarks.Bookmark do
   def changeset(bookmark, attrs) do
     bookmark
     |> cast(attrs, [:title, :description, :url, :public, :user_id])
-    |> validate_required([:title, :url, :public, :user_id])
+    |> validate_required([:title, :url, :user_id])
     |> validate_url(:url)
     |> assoc_constraint(:user)
   end
