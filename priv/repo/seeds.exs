@@ -14,8 +14,14 @@ alias Nasty.Repo
 alias Nasty.Accounts
 alias Nasty.Bookmarks
 import Ecto.Query
-# Get the bob@tom.com user
-user = Repo.get_by!(Accounts.User, email: "bob@tom.com")
+
+# Get all users in the system
+users = Repo.all(Accounts.User)
+
+if Enum.empty?(users) do
+  IO.puts("No users found in the system. Please create some users first.")
+  System.halt(1)
+end
 
 # List of sample bookmarks
 bookmarks = [
@@ -196,21 +202,42 @@ bookmarks = [
   }
 ]
 
-# Clear existing bookmarks for this user
-Repo.delete_all(from b in Nasty.Bookmarks.Bookmark, where: b.user_id == ^user.id)
+# For each user, clear their bookmarks and create new ones
+for user <- users do
+  IO.puts("Creating bookmarks for user: #{user.email}")
 
-# Create bookmarks
-for {title, description, url, tags, public} <- bookmarks do
-  Bookmarks.create_bookmark(
-    %{
-      "title" => title,
-      "description" => description,
-      "url" => url,
-      "public" => public,
-      "user_id" => user.id
-    },
-    Enum.join(tags, ", ")
-  )
+  # Clear existing bookmarks for this user
+  {deleted, _} = Repo.delete_all(from b in Nasty.Bookmarks.Bookmark, where: b.user_id == ^user.id)
+  IO.puts("Cleared #{deleted} existing bookmarks")
+
+  # Create new bookmarks
+  results = for {title, description, url, tags, public} <- bookmarks do
+    case Bookmarks.create_bookmark(
+      %{
+        "title" => title,
+        "description" => description,
+        "url" => url,
+        "public" => public,
+        "user_id" => user.id
+      },
+      Enum.join(tags, ", ")
+    ) do
+      {:ok, _bookmark} -> :ok
+      {:error, changeset} -> {:error, title, changeset}
+    end
+  end
+
+  # Report results
+  errors = Enum.filter(results, fn result -> match?({:error, _, _}, result) end)
+
+  if Enum.empty?(errors) do
+    IO.puts("Successfully created #{length(bookmarks)} bookmarks for #{user.email}")
+  else
+    IO.puts("Created bookmarks for #{user.email} with #{length(errors)} errors:")
+    for {:error, title, changeset} <- errors do
+      IO.puts("  Failed to create '#{title}': #{inspect(changeset.errors)}")
+    end
+  end
 end
 
-IO.puts("Seed data created successfully!")
+IO.puts("\nSeed data creation completed!")
