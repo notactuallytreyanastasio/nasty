@@ -4,8 +4,11 @@ defmodule Nasty.Traffic.Simulator do
 
   alias Nasty.Traffic.SampleData
   alias Nasty.{Accounts, Bookmarks}
+  alias Nasty.Bookmarks.PubSub
+  alias Nasty.Repo
+  alias Nasty.Accounts.User
 
-  @simulation_interval :timer.seconds(30)
+  @simulation_interval :timer.seconds(3)
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
@@ -13,7 +16,7 @@ defmodule Nasty.Traffic.Simulator do
 
   def init(_) do
     # Get or create test users for simulation
-    users = ensure_test_users()
+    users = Repo.all(User)
     schedule_simulation()
     {:ok, %{users: users}}
   end
@@ -38,39 +41,14 @@ defmodule Nasty.Traffic.Simulator do
 
     tags = SampleData.generate_tags() |> Enum.join(", ")
 
-    case Bookmarks.create_bookmark(bookmark_attrs, tags) do
-      {:ok, :creating} ->
-        Logger.info("Simulated traffic: Creating bookmark '#{title}' for user #{user.email}")
-
-      {:error, changeset} ->
-        Logger.error("Failed to create simulated bookmark: #{inspect(changeset.errors)}")
-    end
+    # Use PubSub instead of direct creation
+    PubSub.broadcast_create(bookmark_attrs, tags)
+    Logger.info("Simulated traffic: Broadcasting bookmark creation '#{title}' for user #{user.email}")
   end
 
   defp schedule_simulation do
     # Add some randomness to the interval
     variance = :rand.uniform(5000)
     Process.send_after(self(), :simulate, @simulation_interval + variance)
-  end
-
-  defp ensure_test_users do
-    1..5
-    |> Enum.map(fn i ->
-      email = "test_user_#{i}@example.com"
-
-      case Accounts.get_user_by_email(email) do
-        nil ->
-          {:ok, user} =
-            Accounts.register_user(%{
-              email: email,
-              password: "password123456"
-            })
-
-          user
-
-        user ->
-          user
-      end
-    end)
   end
 end

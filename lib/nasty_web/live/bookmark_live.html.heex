@@ -63,45 +63,48 @@
         <span class="font-bold text-cyan-400">root@bookmarks:</span>
         <span class="text-fuchsia-400">~/all</span>
         <span class="animate-pulse text-cyan-500">$</span>
+        <span class="text-cyan-400">count: <%= length(@bookmarks) %></span>
       </div>
 
-      <div class="space-y-6">
-        <div
-          :for={bookmark <- @bookmarks}
-          class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300"
-        >
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-baseline justify-between gap-4">
-                <.link
-                  href={bookmark.url}
-                  target="_blank"
-                  class="text-fuchsia-400 font-bold text-lg hover:text-cyan-400 transition-colors duration-300 truncate"
-                >
-                  {bookmark.title}
-                </.link>
-                <span class={[
-                  "text-sm px-2 py-1 rounded-md whitespace-nowrap",
-                  bookmark.public && "text-cyan-400 border border-cyan-500",
-                  !bookmark.public && "text-fuchsia-400 border border-fuchsia-500"
-                ]}>
-                </span>
-              </div>
-              <p :if={bookmark.description} class="text-cyan-600 mt-2 text-sm">
-                {bookmark.description}
-              </p>
-              <div class="text-cyan-700 text-sm font-bold mt-1 truncate">{bookmark.url}</div>
-              <div class="flex flex-wrap gap-2 mt-3">
-                <span
-                  :for={tag <- bookmark.tags}
-                  class="text-xs text-cyan-600 border border-cyan-700 px-2 py-1 rounded-md"
-                >
-                  {tag.name}
-                </span>
+      <div class="space-y-6" id="bookmarks-container" phx-update="append">
+        <%= for bookmark <- @bookmarks do %>
+          <div
+            id={"bookmark-#{bookmark.id}"}
+            class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300"
+          >
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-baseline justify-between gap-4">
+                  <.link
+                    href={bookmark.url}
+                    target="_blank"
+                    class="text-fuchsia-400 font-bold text-lg hover:text-cyan-400 transition-colors duration-300 truncate"
+                  >
+                    {bookmark.title}
+                  </.link>
+                  <span class={[
+                    "text-sm px-2 py-1 rounded-md whitespace-nowrap",
+                    bookmark.public && "text-cyan-400 border border-cyan-500",
+                    !bookmark.public && "text-fuchsia-400 border border-fuchsia-500"
+                  ]}>
+                  </span>
+                </div>
+                <p :if={bookmark.description} class="text-cyan-600 mt-2 text-sm">
+                  {bookmark.description}
+                </p>
+                <div class="text-cyan-700 text-sm font-bold mt-1 truncate">{bookmark.url}</div>
+                <div class="flex flex-wrap gap-2 mt-3">
+                  <span
+                    :for={tag <- bookmark.tags}
+                    class="text-xs text-cyan-600 border border-cyan-700 px-2 py-1 rounded-md"
+                  >
+                    {tag.name}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        <% end %>
       </div>
     </div>
   </div>

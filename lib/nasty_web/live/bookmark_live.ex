@@ -1,11 +1,15 @@
 defmodule NastyWeb.BookmarkLive do
   use NastyWeb, :live_view
+  require Logger
   alias Nasty.Bookmarks
   alias Nasty.Bookmarks.{Bookmark, PubSub}
 
   @impl true
   def mount(_params, _session, %{assigns: %{current_user: current_user}} = socket) do
-    if connected?(socket), do: PubSub.subscribe()
+    if connected?(socket) do
+      PubSub.subscribe()
+      Logger.info("BookmarkLive subscribed to PubSub")
+    end
 
     {:ok,
      socket
@@ -16,6 +20,7 @@ defmodule NastyWeb.BookmarkLive do
 
   @impl true
   def handle_info({:create_bookmark, attrs, _tags}, socket) do
+    Logger.info("BookmarkLive received create_bookmark message")
     current_user_id = socket.assigns.current_user.id
     creator_id = attrs["user_id"]
 
@@ -67,7 +72,10 @@ defmodule NastyWeb.BookmarkLive do
 
   # Private helper to get bookmarks for the current user
   defp list_bookmarks(%{assigns: %{current_user: current_user}}) do
-    Bookmarks.list_bookmarks(current_user.id)
+    Logger.info("Fetching bookmarks for user #{current_user.id}")
+    bookmarks = Bookmarks.list_bookmarks(current_user.id)
+    Logger.info("Found #{length(bookmarks)} bookmarks")
+    bookmarks
   end
 
   defp list_bookmarks(_socket), do: []
