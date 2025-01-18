@@ -11,21 +11,24 @@ defmodule NastyWeb.BookmarkLive do
       {:ok,
        socket
        |> assign(:bookmarks, bookmarks)
-       |> assign(:form, to_form(Bookmark.new_changeset()))}
+       |> assign(:form, to_form(Bookmark.new_changeset()))
+       |> assign(:show_modal, false)}
     else
       {:ok,
        socket
        |> assign(:bookmarks, [])
-       |> assign(:form, to_form(Bookmark.new_changeset()))}
+       |> assign(:form, to_form(Bookmark.new_changeset()))
+       |> assign(:show_modal, false)}
     end
   end
 
   @impl true
-  def mount(_params, _session, socket) do
-    {:ok,
-     socket
-     |> assign(:bookmarks_by_tag, %{})
-     |> assign(:form, to_form(Bookmark.new_changeset()))}
+  def handle_event("open-modal", _, socket) do
+    {:noreply, assign(socket, :show_modal, true)}
+  end
+
+  def handle_event("close-modal", _, socket) do
+    {:noreply, assign(socket, :show_modal, false)}
   end
 
   @impl true
@@ -39,27 +42,13 @@ defmodule NastyWeb.BookmarkLive do
 
         {:noreply,
          socket
-         |> assign(:bookmarks_by_tag, group_bookmarks_by_tag(bookmarks))
+         |> assign(:bookmarks, bookmarks)
          |> assign(:form, to_form(Bookmark.new_changeset()))
+         |> assign(:show_modal, false)
          |> put_flash(:info, "Bookmark saved.")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, form: to_form(changeset))}
     end
-  end
-
-  defp group_bookmarks_by_tag(bookmarks) do
-    bookmarks
-    # bookmarks
-    # |> Enum.flat_map(fn bookmark ->
-    #   case bookmark.tags do
-    #     [] -> [{"untagged", [bookmark]}]
-    #     tags -> Enum.map(tags, &{&1.name, [bookmark]})
-    #   end
-    # end)
-    # |> Enum.reduce(%{}, fn {tag, bookmarks}, acc ->
-    #   Map.update(acc, tag, bookmarks, &(&1 ++ bookmarks))
-    # end)
-    # |> Enum.sort_by(&elem(&1, 0))
   end
 end
