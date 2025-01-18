@@ -14,8 +14,6 @@ defmodule Nasty.Application do
       {Phoenix.PubSub, name: Nasty.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Nasty.Finch},
-      # Start a worker by calling: Nasty.Worker.start_link(arg)
-      # {Nasty.Worker, arg},
       # Start to serve requests, typically the last entry
       NastyWeb.Endpoint
     ]
