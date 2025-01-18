@@ -2,41 +2,60 @@ defmodule Nasty.Bookmarks do
   import Ecto.Query
 
   alias Nasty.Repo
-  alias Nasty.Bookmarks.Bookmark
-  alias Nasty.Bookmarks.Tag
+  alias Nasty.Bookmarks.{Bookmark, Tag, Cache}
 
   def list_bookmarks(user_id) do
-    Bookmark
-    |> where([b], b.user_id == ^user_id)
-    |> preload(:tags)
-    |> Repo.all()
+    Cache.get_user_bookmarks(user_id)
   end
 
   def list_public_bookmarks do
-    Bookmark
-    |> where([b], b.public == true)
-    |> preload([:tags, :user])
-    |> Repo.all()
+    Cache.get_public_bookmarks()
   end
 
   def get_bookmark!(id), do: Repo.get!(Bookmark, id) |> Repo.preload(:tags)
 
   def create_bookmark(attrs \\ %{}, tags) do
-    %Bookmark{}
-    |> Bookmark.changeset(attrs)
-    |> put_tags(tags)
-    |> Repo.insert()
+    result =
+      %Bookmark{}
+      |> Bookmark.changeset(attrs)
+      |> put_tags(tags)
+      |> Repo.insert()
+
+    case result do
+      {:ok, bookmark} ->
+        Cache.update_cache(bookmark)
+        {:ok, bookmark}
+      error ->
+        error
+    end
   end
 
   def update_bookmark(%Bookmark{} = bookmark, attrs, tags) do
-    bookmark
-    |> Bookmark.changeset(attrs)
-    |> put_tags(tags)
-    |> Repo.update()
+    result =
+      bookmark
+      |> Bookmark.changeset(attrs)
+      |> put_tags(tags)
+      |> Repo.update()
+
+    case result do
+      {:ok, bookmark} ->
+        Cache.update_cache(bookmark)
+        {:ok, bookmark}
+      error ->
+        error
+    end
   end
 
   def delete_bookmark(%Bookmark{} = bookmark) do
-    Repo.delete(bookmark)
+    result = Repo.delete(bookmark)
+
+    case result do
+      {:ok, bookmark} ->
+        Cache.delete_from_cache(bookmark)
+        {:ok, bookmark}
+      error ->
+        error
+    end
   end
 
   def list_tags do

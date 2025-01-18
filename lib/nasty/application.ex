@@ -15,7 +15,8 @@ defmodule Nasty.Application do
       # Start the Finch HTTP client for sending emails
       {Finch, name: Nasty.Finch},
       # Start to serve requests, typically the last entry
-      NastyWeb.Endpoint
+      NastyWeb.Endpoint,
+      Nasty.Bookmarks.Cache
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
