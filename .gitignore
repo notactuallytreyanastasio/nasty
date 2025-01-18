@@ -35,3 +35,6 @@ nasty-*.tar
 npm-debug.log
 /assets/node_modules/
 
+*.swp
+*.swn
+*.swo
