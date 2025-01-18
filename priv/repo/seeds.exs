@@ -211,21 +211,22 @@ for user <- users do
   IO.puts("Cleared #{deleted} existing bookmarks")
 
   # Create new bookmarks
-  results = for {title, description, url, tags, public} <- bookmarks do
-    case Bookmarks.create_bookmark(
-      %{
-        "title" => title,
-        "description" => description,
-        "url" => url,
-        "public" => public,
-        "user_id" => user.id
-      },
-      Enum.join(tags, ", ")
-    ) do
-      {:ok, _bookmark} -> :ok
-      {:error, changeset} -> {:error, title, changeset}
+  results =
+    for {title, description, url, tags, public} <- bookmarks do
+      case Bookmarks.create_bookmark(
+             %{
+               "title" => title,
+               "description" => description,
+               "url" => url,
+               "public" => public,
+               "user_id" => user.id
+             },
+             Enum.join(tags, ", ")
+           ) do
+        {:ok, _bookmark} -> :ok
+        {:error, changeset} -> {:error, title, changeset}
+      end
     end
-  end
 
   # Report results
   errors = Enum.filter(results, fn result -> match?({:error, _, _}, result) end)
@@ -234,6 +235,7 @@ for user <- users do
     IO.puts("Successfully created #{length(bookmarks)} bookmarks for #{user.email}")
   else
     IO.puts("Created bookmarks for #{user.email} with #{length(errors)} errors:")
+
     for {:error, title, changeset} <- errors do
       IO.puts("  Failed to create '#{title}': #{inspect(changeset.errors)}")
     end

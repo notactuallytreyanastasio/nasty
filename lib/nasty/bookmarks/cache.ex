@@ -1,7 +1,8 @@
 defmodule Nasty.Bookmarks.Cache do
   use GenServer
+  require Logger
 
-  alias Nasty.Bookmarks.Bookmark
+  alias Nasty.Bookmarks.{Bookmark, PubSub}
   alias Nasty.Repo
 
   @table_name :bookmarks_cache
@@ -12,7 +13,48 @@ defmodule Nasty.Bookmarks.Cache do
 
   def init(_) do
     table = :ets.new(@table_name, [:set, :protected, :named_table])
+    PubSub.subscribe()
     {:ok, %{table: table}, {:continue, :load_bookmarks}}
+  end
+
+  # Handle PubSub messages
+  def handle_info({:create_bookmark, attrs, tags}, state) do
+    case Nasty.Bookmarks.do_create_bookmark(attrs, tags) do
+      {:ok, bookmark} ->
+        update_cache(bookmark)
+        Logger.info("Cache updated after bookmark creation: #{bookmark.title}")
+
+      {:error, changeset} ->
+        Logger.error("Failed to create bookmark in cache: #{inspect(changeset.errors)}")
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_info({:update_bookmark, bookmark, attrs, tags}, state) do
+    case Nasty.Bookmarks.do_update_bookmark(bookmark, attrs, tags) do
+      {:ok, updated_bookmark} ->
+        update_cache(updated_bookmark)
+        Logger.info("Cache updated after bookmark update: #{updated_bookmark.title}")
+
+      {:error, changeset} ->
+        Logger.error("Failed to update bookmark in cache: #{inspect(changeset.errors)}")
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_info({:delete_bookmark, bookmark}, state) do
+    case Nasty.Bookmarks.do_delete_bookmark(bookmark) do
+      {:ok, _} ->
+        delete_from_cache(bookmark)
+        Logger.info("Cache updated after bookmark deletion: #{bookmark.title}")
+
+      {:error, changeset} ->
+        Logger.error("Failed to delete bookmark from cache: #{inspect(changeset.errors)}")
+    end
+
+    {:noreply, state}
   end
 
   def handle_continue(:load_bookmarks, state) do
@@ -32,8 +74,13 @@ defmodule Nasty.Bookmarks.Cache do
 
   def get_user_bookmarks(user_id) do
     case :ets.lookup(@table_name, :all_bookmarks) do
-      [{:all_bookmarks, bookmarks}] -> Map.get(bookmarks, user_id, [])
-      [] -> []
+      [{:all_bookmarks, bookmarks}] ->
+        bookmarks
+        |> Map.get(user_id, [])
+        |> Enum.sort_by(& &1.inserted_at, :desc)
+
+      [] ->
+        []
     end
   end
 
@@ -44,7 +91,10 @@ defmodule Nasty.Bookmarks.Cache do
         |> Map.values()
         |> List.flatten()
         |> Enum.filter(& &1.public)
-      [] -> []
+        |> Enum.sort_by(& &1.inserted_at, :desc)
+
+      [] ->
+        []
     end
   end
 
@@ -68,7 +118,15 @@ defmodule Nasty.Bookmarks.Cache do
     updated_user_bookmarks =
       user_bookmarks
       |> Enum.reject(&(&1.id == bookmark.id))
-      |> Enum.concat([bookmark])
+
+    # Add new bookmark to beginning or end based on ownership
+    updated_user_bookmarks =
+      if bookmark.user_id == bookmark.user_id do
+        [bookmark | updated_user_bookmarks]
+      else
+        updated_user_bookmarks ++ [bookmark]
+      end
+      |> Enum.sort_by(& &1.inserted_at, :desc)
 
     updated_bookmarks = Map.put(bookmarks, bookmark.user_id, updated_user_bookmarks)
     :ets.insert(@table_name, {:all_bookmarks, updated_bookmarks})

@@ -39,8 +39,9 @@ defmodule Nasty.Traffic.Simulator do
     tags = SampleData.generate_tags() |> Enum.join(", ")
 
     case Bookmarks.create_bookmark(bookmark_attrs, tags) do
-      {:ok, bookmark} ->
-        Logger.info("Simulated traffic: Created bookmark '#{bookmark.title}' for user #{user.email}")
+      {:ok, :creating} ->
+        Logger.info("Simulated traffic: Creating bookmark '#{title}' for user #{user.email}")
+
       {:error, changeset} ->
         Logger.error("Failed to create simulated bookmark: #{inspect(changeset.errors)}")
     end
@@ -59,11 +60,14 @@ defmodule Nasty.Traffic.Simulator do
 
       case Accounts.get_user_by_email(email) do
         nil ->
-          {:ok, user} = Accounts.register_user(%{
-            email: email,
-            password: "password123456"
-          })
+          {:ok, user} =
+            Accounts.register_user(%{
+              email: email,
+              password: "password123456"
+            })
+
           user
+
         user ->
           user
       end

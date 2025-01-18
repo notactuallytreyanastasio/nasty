@@ -2,7 +2,7 @@ defmodule Nasty.Bookmarks do
   import Ecto.Query
 
   alias Nasty.Repo
-  alias Nasty.Bookmarks.{Bookmark, Tag, Cache}
+  alias Nasty.Bookmarks.{Bookmark, Tag, Cache, PubSub}
 
   def list_bookmarks(user_id) do
     Cache.get_user_bookmarks(user_id)
@@ -15,47 +15,18 @@ defmodule Nasty.Bookmarks do
   def get_bookmark!(id), do: Repo.get!(Bookmark, id) |> Repo.preload(:tags)
 
   def create_bookmark(attrs \\ %{}, tags) do
-    result =
-      %Bookmark{}
-      |> Bookmark.changeset(attrs)
-      |> put_tags(tags)
-      |> Repo.insert()
-
-    case result do
-      {:ok, bookmark} ->
-        Cache.update_cache(bookmark)
-        {:ok, bookmark}
-      error ->
-        error
-    end
+    PubSub.broadcast_create(attrs, tags)
+    {:ok, :creating}
   end
 
   def update_bookmark(%Bookmark{} = bookmark, attrs, tags) do
-    result =
-      bookmark
-      |> Bookmark.changeset(attrs)
-      |> put_tags(tags)
-      |> Repo.update()
-
-    case result do
-      {:ok, bookmark} ->
-        Cache.update_cache(bookmark)
-        {:ok, bookmark}
-      error ->
-        error
-    end
+    PubSub.broadcast_update(bookmark, attrs, tags)
+    {:ok, :updating}
   end
 
   def delete_bookmark(%Bookmark{} = bookmark) do
-    result = Repo.delete(bookmark)
-
-    case result do
-      {:ok, bookmark} ->
-        Cache.delete_from_cache(bookmark)
-        {:ok, bookmark}
-      error ->
-        error
-    end
+    PubSub.broadcast_delete(bookmark)
+    {:ok, :deleting}
   end
 
   def list_tags do
@@ -97,5 +68,24 @@ defmodule Nasty.Bookmarks do
       tag ->
         tag
     end
+  end
+
+  # Internal functions that actually perform the database operations
+  def do_create_bookmark(attrs, tags) do
+    %Bookmark{}
+    |> Bookmark.changeset(attrs)
+    |> put_tags(tags)
+    |> Repo.insert()
+  end
+
+  def do_update_bookmark(bookmark, attrs, tags) do
+    bookmark
+    |> Bookmark.changeset(attrs)
+    |> put_tags(tags)
+    |> Repo.update()
+  end
+
+  def do_delete_bookmark(bookmark) do
+    Repo.delete(bookmark)
   end
 end
