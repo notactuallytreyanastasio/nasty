@@ -29,36 +29,39 @@
   </div>
 
   <div class="space-y-8">
-    <%= for {tag, bookmarks} <- @bookmarks_by_tag do %>
-      <div class="border-2 border-cyan-500 p-4 bg-black/30">
-        <div class="flex items-center gap-2 mb-2">
-          <span class="font-bold text-cyan-400">root@bookmarks:</span>
-          <span class="text-fuchsia-400">~/tags/<%= tag %></span>
-          <span class="animate-pulse text-cyan-500">$</span>
-          <span class="text-cyan-700">(<%= length(bookmarks) %>)</span>
-        </div>
-
-        <div class="ml-8 space-y-4">
-          <%= for bookmark <- bookmarks do %>
-            <div class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300">
-              <div class="flex items-center justify-between">
-                <a href={bookmark.url} target="_blank" class="text-fuchsia-400 font-bold hover:text-cyan-400 transition-colors duration-300">
-                  <%= bookmark.title %>
-                </a>
-                <span class={[
-                  "text-sm px-2 py-1 rounded-md",
-                  bookmark.public && "text-cyan-400 border border-cyan-500",
-                  !bookmark.public && "text-fuchsia-400 border border-fuchsia-500"
-                ]}>
-                  <%= if bookmark.public, do: "public://", else: "private://" %>
-                </span>
-              </div>
-              <div class="text-cyan-600 my-1"><%= bookmark.description %></div>
-              <div class="text-cyan-700 text-sm font-bold"><%= bookmark.url %></div>
-            </div>
-          <% end %>
-        </div>
+    <div class="border-2 border-cyan-500 p-4 bg-black/30">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="font-bold text-cyan-400">root@bookmarks:</span>
+        <span class="text-fuchsia-400">~/all</span>
+        <span class="animate-pulse text-cyan-500">$</span>
       </div>
-    <% end %>
+
+      <div class="ml-8 space-y-4">
+        <%= for bookmark <- @bookmarks do %>
+          <div class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300">
+            <div class="flex items-center justify-between">
+              <a href={bookmark.url} target="_blank" class="text-fuchsia-400 font-bold hover:text-cyan-400 transition-colors duration-300">
+                <%= bookmark.title %>
+              </a>
+              <span class={[
+                "text-sm px-2 py-1 rounded-md",
+                bookmark.public && "text-cyan-400 border border-cyan-500",
+                !bookmark.public && "text-fuchsia-400 border border-fuchsia-500"
+              ]}>
+                <%= if bookmark.public, do: "public://", else: "private://" %>
+              </span>
+            </div>
+            <div class="text-cyan-700 text-sm font-bold"><%= bookmark.url %></div>
+            <div class="flex gap-2 mt-2">
+              <%= for tag <- bookmark.tags do %>
+                <span class="text-xs text-cyan-600 border border-cyan-700 px-2 py-1 rounded-md">
+                  <%= tag.name %>
+                </span>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
   </div>
 </div>

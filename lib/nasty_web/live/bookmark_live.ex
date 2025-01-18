@@ -4,30 +4,28 @@ defmodule NastyWeb.BookmarkLive do
   alias Nasty.Bookmarks.Bookmark
 
   @impl true
-  def mount(_params, _session, socket) do
-    case socket.assigns do
-      %{current_user: current_user} ->
-        if connected?(socket) do
-          bookmarks = Bookmarks.list_bookmarks(current_user.id)
-          bookmarks_by_tag = group_bookmarks_by_tag(bookmarks)
+  def mount(_params, _session, %{assigns: %{current_user: current_user}} = socket) do
+    if connected?(socket) do
+      bookmarks = Bookmarks.list_bookmarks(current_user.id)
 
-          {:ok,
-           socket
-           |> assign(:bookmarks_by_tag, bookmarks_by_tag)
-           |> assign(:form, to_form(Bookmark.new_changeset()))}
-        else
-          {:ok,
-           socket
-           |> assign(:bookmarks_by_tag, %{})
-           |> assign(:form, to_form(Bookmark.new_changeset()))}
-        end
-
-      _ ->
-        {:ok,
-         socket
-         |> assign(:bookmarks_by_tag, %{})
-         |> assign(:form, to_form(Bookmark.new_changeset()))}
+      {:ok,
+       socket
+       |> assign(:bookmarks, bookmarks)
+       |> assign(:form, to_form(Bookmark.new_changeset()))}
+    else
+      {:ok,
+       socket
+       |> assign(:bookmarks, [])
+       |> assign(:form, to_form(Bookmark.new_changeset()))}
     end
+  end
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok,
+     socket
+     |> assign(:bookmarks_by_tag, %{})
+     |> assign(:form, to_form(Bookmark.new_changeset()))}
   end
 
   @impl true
@@ -52,15 +50,16 @@ defmodule NastyWeb.BookmarkLive do
 
   defp group_bookmarks_by_tag(bookmarks) do
     bookmarks
-    |> Enum.flat_map(fn bookmark ->
-      case bookmark.tags do
-        [] -> [{"untagged", [bookmark]}]
-        tags -> Enum.map(tags, &{&1.name, [bookmark]})
-      end
-    end)
-    |> Enum.reduce(%{}, fn {tag, bookmarks}, acc ->
-      Map.update(acc, tag, bookmarks, &(&1 ++ bookmarks))
-    end)
-    |> Enum.sort_by(&elem(&1, 0))
+    # bookmarks
+    # |> Enum.flat_map(fn bookmark ->
+    #   case bookmark.tags do
+    #     [] -> [{"untagged", [bookmark]}]
+    #     tags -> Enum.map(tags, &{&1.name, [bookmark]})
+    #   end
+    # end)
+    # |> Enum.reduce(%{}, fn {tag, bookmarks}, acc ->
+    #   Map.update(acc, tag, bookmarks, &(&1 ++ bookmarks))
+    # end)
+    # |> Enum.sort_by(&elem(&1, 0))
   end
 end
