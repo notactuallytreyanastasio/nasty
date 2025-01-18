@@ -1,107 +1,46 @@
 <div class="min-h-screen bg-black text-fuchsia-500 font-mono p-4">
-  <div class="flex items-center justify-between gap-4 mb-8">
-    <div class="flex items-center gap-4">
-      <button
-        phx-click="open-modal"
-        class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
-      >
-        <span class="animate-pulse text-cyan-500">$</span>
-        <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
-          new_bookmark
-        </span>
-      </button>
-    </div>
+  <div class="flex items-center justify-between gap-4 mb-4">
+    <button
+      phx-click="open-modal"
+      class="border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
+    >
+      <span class="animate-pulse text-cyan-500">$</span>
+      <span class="text-cyan-400">new_bookmark</span>
+    </button>
 
     <div class="flex items-center gap-4">
-      <div :if={@current_user} class="flex items-center gap-4">
-        <span class="text-cyan-400">{@current_user.email}</span>
-        <.link
-          href={~p"/users/settings"}
-          class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
-        >
-          <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
-            settings
-          </span>
-        </.link>
-        <.link
-          href={~p"/users/log_out"}
-          method="delete"
-          class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
-        >
-          <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
-            logout
-          </span>
-        </.link>
-      </div>
-
-      <div :if={!@current_user} class="flex items-center gap-4">
-        <.link
-          href={~p"/users/log_in"}
-          class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
-        >
-          <span class="animate-pulse text-cyan-500">$</span>
-          <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
-            login
-          </span>
-        </.link>
-        <.link
-          href={~p"/users/register"}
-          class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
-        >
-          <span class="animate-pulse text-cyan-500">$</span>
-          <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
-            register
-          </span>
-        </.link>
-      </div>
+      <span class="text-cyan-400"><%= @current_user.email %></span>
+      <.link href={~p"/users/settings"} class="text-cyan-400 hover:text-fuchsia-400">settings</.link>
+      <.link href={~p"/users/log_out"} method="delete" class="text-cyan-400 hover:text-fuchsia-400">logout</.link>
     </div>
   </div>
 
-  <div class="space-y-8 max-w-6xl mx-auto">
-    <div class="border-2 border-cyan-500 p-4 bg-black/30">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="font-bold text-cyan-400">root@bookmarks:</span>
-        <span class="text-fuchsia-400">~/all</span>
-        <span class="animate-pulse text-cyan-500">$</span>
-        <span class="text-cyan-400">count: <%= length(@bookmarks) %></span>
+  <div class="w-full">
+    <div class="border-2 border-cyan-500 bg-black/30">
+      <div class="flex items-center gap-2 p-2 border-b-2 border-cyan-500">
+        <span class="text-cyan-400">root@bookmarks:~/all $ count: <%= length(@bookmarks) %></span>
       </div>
 
-      <div class="space-y-6" id="bookmarks-container" phx-update="append">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6" id="bookmarks-container" phx-update="append">
         <%= for bookmark <- @bookmarks do %>
           <div
             id={"bookmark-#{bookmark.id}"}
-            class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300"
+            class="flex flex-col p-3 border-cyan-500"
+            style="border-width: 0 1px 1px 0"
           >
-            <div class="flex items-center justify-between gap-4">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-baseline justify-between gap-4">
-                  <.link
-                    href={bookmark.url}
-                    target="_blank"
-                    class="text-fuchsia-400 font-bold text-lg hover:text-cyan-400 transition-colors duration-300 truncate"
-                  >
-                    {bookmark.title}
-                  </.link>
-                  <span class={[
-                    "text-sm px-2 py-1 rounded-md whitespace-nowrap",
-                    bookmark.public && "text-cyan-400 border border-cyan-500",
-                    !bookmark.public && "text-fuchsia-400 border border-fuchsia-500"
-                  ]}>
-                  </span>
-                </div>
-                <p :if={bookmark.description} class="text-cyan-600 mt-2 text-sm">
-                  {bookmark.description}
-                </p>
-                <div class="text-cyan-700 text-sm font-bold mt-1 truncate">{bookmark.url}</div>
-                <div class="flex flex-wrap gap-2 mt-3">
-                  <span
-                    :for={tag <- bookmark.tags}
-                    class="text-xs text-cyan-600 border border-cyan-700 px-2 py-1 rounded-md"
-                  >
-                    {tag.name}
-                  </span>
-                </div>
-              </div>
+            <.link
+              href={bookmark.url}
+              target="_blank"
+              class="text-fuchsia-400 hover:text-cyan-400 font-bold text-sm mb-1"
+            >
+              <%= bookmark.title %>
+            </.link>
+            <div class="flex flex-wrap gap-1">
+              <%= for tag <- bookmark.tags do %>
+                <span class="text-[10px] text-cyan-600 bg-cyan-950/30 px-1 rounded">
+                  <%= tag.name %>
+                </span>
+              <% end %>
             </div>
           </div>
         <% end %>
