@@ -213,4 +213,4 @@ for {title, description, url, tags, public} <- bookmarks do
   )
 end
 
-IO.puts "Seed data created successfully!"
+IO.puts("Seed data created successfully!")

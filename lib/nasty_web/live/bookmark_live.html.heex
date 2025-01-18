@@ -1,10 +1,60 @@
 <div class="min-h-screen bg-black text-fuchsia-500 font-mono p-4">
-  <div class="flex items-center gap-4 mb-8">
-    <button phx-click="open-modal"
-      class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300">
-      <span class="animate-pulse text-cyan-500">$</span>
-      <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">new_bookmark</span>
-    </button>
+  <div class="flex items-center justify-between gap-4 mb-8">
+    <div class="flex items-center gap-4">
+      <button
+        phx-click="open-modal"
+        class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
+      >
+        <span class="animate-pulse text-cyan-500">$</span>
+        <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
+          new_bookmark
+        </span>
+      </button>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <div :if={@current_user} class="flex items-center gap-4">
+        <span class="text-cyan-400">{@current_user.email}</span>
+        <.link
+          href={~p"/users/settings"}
+          class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
+        >
+          <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
+            settings
+          </span>
+        </.link>
+        <.link
+          href={~p"/users/log_out"}
+          method="delete"
+          class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
+        >
+          <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
+            logout
+          </span>
+        </.link>
+      </div>
+
+      <div :if={!@current_user} class="flex items-center gap-4">
+        <.link
+          href={~p"/users/log_in"}
+          class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
+        >
+          <span class="animate-pulse text-cyan-500">$</span>
+          <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
+            login
+          </span>
+        </.link>
+        <.link
+          href={~p"/users/register"}
+          class="group border-2 border-cyan-500 bg-black/30 px-4 py-2 hover:border-fuchsia-500 transition-colors duration-300"
+        >
+          <span class="animate-pulse text-cyan-500">$</span>
+          <span class="text-cyan-400 group-hover:text-fuchsia-400 transition-colors duration-300">
+            register
+          </span>
+        </.link>
+      </div>
+    </div>
   </div>
 
   <div class="space-y-8 max-w-6xl mx-auto">
@@ -16,12 +66,18 @@
       </div>
 
       <div class="space-y-6">
-        <div :for={bookmark <- @bookmarks} class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300">
+        <div
+          :for={bookmark <- @bookmarks}
+          class="border-l-2 border-cyan-500 pl-4 hover:border-fuchsia-500 transition-colors duration-300"
+        >
           <div class="flex items-center justify-between gap-4">
             <div class="flex-1 min-w-0">
               <div class="flex items-baseline justify-between gap-4">
-                <.link href={bookmark.url} target="_blank"
-                  class="text-fuchsia-400 font-bold text-lg hover:text-cyan-400 transition-colors duration-300 truncate">
+                <.link
+                  href={bookmark.url}
+                  target="_blank"
+                  class="text-fuchsia-400 font-bold text-lg hover:text-cyan-400 transition-colors duration-300 truncate"
+                >
                   {bookmark.title}
                 </.link>
                 <span class={[
@@ -36,7 +92,10 @@
               </p>
               <div class="text-cyan-700 text-sm font-bold mt-1 truncate">{bookmark.url}</div>
               <div class="flex flex-wrap gap-2 mt-3">
-                <span :for={tag <- bookmark.tags} class="text-xs text-cyan-600 border border-cyan-700 px-2 py-1 rounded-md">
+                <span
+                  :for={tag <- bookmark.tags}
+                  class="text-xs text-cyan-600 border border-cyan-700 px-2 py-1 rounded-md"
+                >
                   {tag.name}
                 </span>
               </div>
@@ -47,9 +106,15 @@
     </div>
   </div>
 
-  <div :if={@show_modal} class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+  <div
+    :if={@show_modal}
+    class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center"
+  >
     <div class="bg-black border-2 border-cyan-500 p-6 max-w-4xl w-full mx-4 relative">
-      <button phx-click="close-modal" class="absolute top-4 right-4 text-cyan-500 hover:text-fuchsia-500">
+      <button
+        phx-click="close-modal"
+        class="absolute top-4 right-4 text-cyan-500 hover:text-fuchsia-500"
+      >
         <span class="text-xl">[x]</span>
       </button>
 
@@ -61,17 +126,36 @@
 
       <.form for={@form} phx-submit="save" class="space-y-4">
         <div class="grid gap-3">
-          <.input field={@form[:url]} type="text" placeholder="url://"
-            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
-          <.input field={@form[:title]} type="text" placeholder="title://"
-            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
-          <.input field={@form[:description]} type="text" placeholder="desc://"
-            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
-          <.input field={@form[:tags]} type="text" placeholder="tags:// (comma-separated)"
-            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500" />
+          <.input
+            field={@form[:url]}
+            type="text"
+            placeholder="url://"
+            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500"
+          />
+          <.input
+            field={@form[:title]}
+            type="text"
+            placeholder="title://"
+            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500"
+          />
+          <.input
+            field={@form[:description]}
+            type="text"
+            placeholder="desc://"
+            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500"
+          />
+          <.input
+            field={@form[:tags]}
+            type="text"
+            placeholder="tags:// (comma-separated)"
+            class="w-full bg-black/50 border-2 border-cyan-500 text-fuchsia-400 placeholder-cyan-700 p-2 focus:outline-none focus:border-fuchsia-500"
+          />
           <label class="flex items-center gap-2 text-cyan-400">
-            <.input field={@form[:public]} type="checkbox"
-              class="appearance-none w-4 h-4 border-2 border-cyan-500 bg-black/50 checked:bg-fuchsia-500 cursor-pointer" />
+            <.input
+              field={@form[:public]}
+              type="checkbox"
+              class="appearance-none w-4 h-4 border-2 border-cyan-500 bg-black/50 checked:bg-fuchsia-500 cursor-pointer"
+            />
             <span>public://</span>
           </label>
           <.button class="w-full bg-cyan-500 hover:bg-fuchsia-500 text-black font-bold py-2 transition-all duration-300 ease-in-out">

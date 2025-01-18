@@ -63,6 +63,7 @@ defmodule Nasty.Bookmarks do
     |> Enum.reject(&(&1 == ""))
     |> Enum.map(&get_or_create_tag/1)
   end
+
   defp parse_and_get_tags(tags) when is_list(tags), do: tags
   defp parse_and_get_tags(nil), do: []
 
@@ -73,7 +74,9 @@ defmodule Nasty.Bookmarks do
       nil ->
         {:ok, tag} = create_tag(%{name: name})
         tag
-      tag -> tag
+
+      tag ->
+        tag
     end
   end
 end

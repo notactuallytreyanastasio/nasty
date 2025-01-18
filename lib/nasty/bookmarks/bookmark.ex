@@ -36,6 +36,7 @@ defmodule Nasty.Bookmarks.Bookmark do
       case URI.parse(url) do
         %URI{scheme: scheme, host: host} when not is_nil(scheme) and not is_nil(host) ->
           []
+
         _ ->
           [{field, "must be a valid URL"}]
       end
