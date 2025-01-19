@@ -33,10 +33,6 @@ defmodule Nasty.Bookmarks do
     Repo.all(Tag)
   end
 
-  def preload_tags(bookmarks) do
-    Repo.preload(bookmarks, :tags)
-  end
-
   def create_tag(attrs \\ %{}) do
     %Tag{}
     |> Tag.changeset(attrs)
