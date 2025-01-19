@@ -12,7 +12,7 @@ defmodule NastyWeb.ChatComponent do
   end
 
   @impl true
-  def update(%{bookmark: bookmark, current_user: current_user} = assigns, socket) do
+  def update(%{bookmark: bookmark, current_user: _current_user} = assigns, socket) do
     if socket.assigns[:bookmark_id] != bookmark.id do
       topic = "bookmark_chat:#{bookmark.id}"
       if socket.assigns[:topic], do: PubSub.unsubscribe(Nasty.PubSub, socket.assigns.topic)

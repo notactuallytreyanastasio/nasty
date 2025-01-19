@@ -2,6 +2,7 @@ defmodule Nasty.Chat do
   alias Nasty.Repo
   alias Nasty.Chat.Message
   alias Phoenix.PubSub
+  alias Nasty.Bookmarks.PubSub, as: BookmarkPubSub
   import Ecto.Query
 
   def list_messages(bookmark_id) do
@@ -19,9 +20,15 @@ defmodule Nasty.Chat do
     |> Repo.insert()
     |> case do
       {:ok, message} ->
-        message = Repo.preload(message, :user)
+        message = Repo.preload(message, [:user, :bookmark])
+
+        # Broadcast to chat channel
         PubSub.broadcast(Nasty.PubSub, "bookmark_chat:#{message.bookmark_id}",
           {:new_message, message})
+
+        # Broadcast to bookmark firehose
+        BookmarkPubSub.broadcast_chat_message(message)
+
         {:ok, message}
       error -> error
     end

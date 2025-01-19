@@ -43,4 +43,9 @@ defmodule NastyWeb.BookmarkFeedChannel do
 
     {:noreply, socket}
   end
+
+  def handle_info({:chat_message, payload}, socket) do
+    push(socket, "bookmark:chat", payload)
+    {:noreply, socket}
+  end
 end

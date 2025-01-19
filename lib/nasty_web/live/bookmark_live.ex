@@ -34,6 +34,14 @@ defmodule NastyWeb.BookmarkLive do
     {:noreply, assign(socket, :bookmarks, bookmarks)}
   end
 
+  def handle_info({:chat_message, _payload}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_info({:new_message, _message}, socket) do
+    {:noreply, socket}
+  end
+
   def handle_info({:update_bookmark, _bookmark, _attrs, _tags}, socket) do
     {:noreply, assign(socket, :bookmarks, user_bookmarks(socket))}
   end
