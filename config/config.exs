@@ -66,4 +66,5 @@ config :phoenix, :json_library, Jason
 import_config "#{config_env()}.exs"
 
 # Add to your existing config
-config :nasty, :simulate_traffic, true
+# config :nasty, :simulate_traffic, true
+config :nasty, :simulate_traffic, false
