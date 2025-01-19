@@ -25,13 +25,10 @@ async def connect_to_feed():
                 data = json.loads(message)
 
                 if data.get("event") == "bookmark:created":
-                    print(f"\n[{datetime.now()}] New bookmark created:")
                     print(json.dumps(data["payload"], indent=2))
                 elif data.get("event") == "bookmark:updated":
-                    print(f"\n[{datetime.now()}] Bookmark updated:")
                     print(json.dumps(data["payload"], indent=2))
                 elif data.get("event") == "bookmark:deleted":
-                    print(f"\n[{datetime.now()}] Bookmark deleted:")
                     print(json.dumps(data["payload"], indent=2))
 
             except websockets.exceptions.ConnectionClosed:

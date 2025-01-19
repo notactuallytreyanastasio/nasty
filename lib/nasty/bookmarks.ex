@@ -4,7 +4,7 @@ defmodule Nasty.Bookmarks do
   alias Nasty.Repo
   alias Nasty.Bookmarks.{Bookmark, Tag, Cache, PubSub}
 
-  def list_bookmarks(user_id) do
+  def user_bookmarks(user_id) do
     Cache.get_user_bookmarks(user_id)
   end
 
@@ -70,7 +70,6 @@ defmodule Nasty.Bookmarks do
     end
   end
 
-  # Internal functions that actually perform the database operations
   def do_create_bookmark(attrs, tags) do
     %Bookmark{}
     |> Bookmark.changeset(attrs)

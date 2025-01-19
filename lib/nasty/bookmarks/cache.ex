@@ -13,16 +13,14 @@ defmodule Nasty.Bookmarks.Cache do
 
   def init(_) do
     table = :ets.new(@table_name, [:set, :protected, :named_table])
-    PubSub.subscribe()
     {:ok, %{table: table}, {:continue, :load_bookmarks}}
   end
 
-  # Handle PubSub messages
-  def handle_info({:create_bookmark, attrs, tags}, state) do
+  # Handle direct cache updates instead of PubSub messages
+  def handle_cast({:create_bookmark, attrs, tags}, state) do
     case Nasty.Bookmarks.do_create_bookmark(attrs, tags) do
       {:ok, bookmark} ->
         update_cache(bookmark)
-        Logger.info("Cache updated after bookmark creation: #{bookmark.title}")
 
       {:error, changeset} ->
         Logger.error("Failed to create bookmark in cache: #{inspect(changeset.errors)}")
@@ -31,11 +29,10 @@ defmodule Nasty.Bookmarks.Cache do
     {:noreply, state}
   end
 
-  def handle_info({:update_bookmark, bookmark, attrs, tags}, state) do
+  def handle_cast({:update_bookmark, bookmark, attrs, tags}, state) do
     case Nasty.Bookmarks.do_update_bookmark(bookmark, attrs, tags) do
       {:ok, updated_bookmark} ->
         update_cache(updated_bookmark)
-        Logger.info("Cache updated after bookmark update: #{updated_bookmark.title}")
 
       {:error, changeset} ->
         Logger.error("Failed to update bookmark in cache: #{inspect(changeset.errors)}")
@@ -44,11 +41,10 @@ defmodule Nasty.Bookmarks.Cache do
     {:noreply, state}
   end
 
-  def handle_info({:delete_bookmark, bookmark}, state) do
+  def handle_cast({:delete_bookmark, bookmark}, state) do
     case Nasty.Bookmarks.do_delete_bookmark(bookmark) do
       {:ok, _} ->
         delete_from_cache(bookmark)
-        Logger.info("Cache updated after bookmark deletion: #{bookmark.title}")
 
       {:error, changeset} ->
         Logger.error("Failed to delete bookmark from cache: #{inspect(changeset.errors)}")
@@ -58,19 +54,15 @@ defmodule Nasty.Bookmarks.Cache do
   end
 
   def handle_continue(:load_bookmarks, state) do
-    # Load all bookmarks with their associations
     bookmarks =
       Bookmark
       |> Repo.all()
       |> Repo.preload([:tags, :user])
       |> Enum.group_by(& &1.user_id)
 
-    # Store in ETS
     :ets.insert(@table_name, {:all_bookmarks, bookmarks})
     {:noreply, state}
   end
-
-  # Client API
 
   def get_user_bookmarks(user_id) do
     case :ets.lookup(@table_name, :all_bookmarks) do

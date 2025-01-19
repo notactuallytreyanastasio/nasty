@@ -15,7 +15,6 @@ defmodule Nasty.Traffic.Simulator do
   end
 
   def init(_) do
-    # Get or create test users for simulation
     users = Repo.all(User)
     schedule_simulation()
     {:ok, %{users: users}}
@@ -41,13 +40,11 @@ defmodule Nasty.Traffic.Simulator do
 
     tags = SampleData.generate_tags() |> Enum.join(", ")
 
-    # Use PubSub instead of direct creation
     PubSub.broadcast_create(bookmark_attrs, tags)
     Logger.info("Simulated traffic: Broadcasting bookmark creation '#{title}' for user #{user.email}")
   end
 
   defp schedule_simulation do
-    # Add some randomness to the interval
     variance = :rand.uniform(1000)
     Process.send_after(self(), :simulate, @simulation_interval + variance)
   end

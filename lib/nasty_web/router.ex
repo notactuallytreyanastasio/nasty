@@ -15,12 +15,21 @@ defmodule NastyWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug NastyWeb.APIAuthPlug
   end
 
   scope "/", NastyWeb do
     pipe_through :browser
 
     get "/", PageController, :home
+  end
+
+  scope "/api", NastyWeb.API do
+    pipe_through :api
+
+    post "/bookmarks", BookmarkController, :create
+    put "/bookmarks/:id", BookmarkController, :update
+    delete "/bookmarks/:id", BookmarkController, :delete
   end
 
   # Other scopes may use custom stacks.
