@@ -9,7 +9,7 @@
     </button>
 
     <div class="flex items-center gap-4">
-      <span class="text-cyan-400"><%= @current_user.email %></span>
+      <span class="text-cyan-400">{@current_user.email}</span>
       <.link href={~p"/users/settings"} class="text-cyan-400 hover:text-fuchsia-400">settings</.link>
       <.link href={~p"/users/log_out"} method="delete" class="text-cyan-400 hover:text-fuchsia-400">logout</.link>
     </div>
@@ -18,32 +18,32 @@
   <div class="w-full">
     <div class="border-2 border-cyan-500 bg-black/30">
       <div class="flex items-center gap-2 p-2 border-b-2 border-cyan-500">
-        <span class="text-cyan-400">root@bookmarks:~/all $ count: <%= length(@bookmarks) %></span>
+        <span class="text-cyan-400">root@bookmarks:~/all $ count: {length(@bookmarks)}</span>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6" id="bookmarks-container" phx-update="append">
-        <%= for bookmark <- @bookmarks do %>
-          <div
-            id={"bookmark-#{bookmark.id}"}
-            class="flex flex-col p-3 border-cyan-500"
-            style="border-width: 0 1px 1px 0"
+        <div
+          :for={bookmark <- @bookmarks}
+          id={"bookmark-#{bookmark.id}"}
+          class="flex flex-col p-3 border-cyan-500"
+          style="border-width: 0 1px 1px 0"
+        >
+          <.link
+            href={bookmark.url}
+            target="_blank"
+            class="text-fuchsia-400 hover:text-cyan-400 font-bold text-sm mb-1"
           >
-            <.link
-              href={bookmark.url}
-              target="_blank"
-              class="text-fuchsia-400 hover:text-cyan-400 font-bold text-sm mb-1"
+            {bookmark.title}
+          </.link>
+          <div class="flex flex-wrap gap-1">
+            <span
+              :for={tag <- bookmark.tags}
+              class="text-[10px] text-cyan-600 bg-cyan-950/30 px-1 rounded"
             >
-              <%= bookmark.title %>
-            </.link>
-            <div class="flex flex-wrap gap-1">
-              <%= for tag <- bookmark.tags do %>
-                <span class="text-[10px] text-cyan-600 bg-cyan-950/30 px-1 rounded">
-                  <%= tag.name %>
-                </span>
-              <% end %>
-            </div>
+              {tag.name}
+            </span>
           </div>
-        <% end %>
+        </div>
       </div>
     </div>
   </div>
