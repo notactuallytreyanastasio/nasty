@@ -45,7 +45,7 @@ defmodule Nasty.Bookmarks.Cache do
   end
 
   def handle_info({:delete_bookmark, bookmark}, state) do
-    case Nasty.Bookmarks.do_delete_bookmark(bookmark) do
+    case Nasty.Bookmarks.delete(bookmark) do
       {:ok, _} ->
         delete_from_cache(bookmark)
         Logger.info("Cache updated after bookmark deletion: #{bookmark.title}")
