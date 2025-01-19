@@ -9,9 +9,9 @@ defmodule NastyWeb.BookmarkFeedChannel do
     {:ok, socket}
   end
 
-  # Handle PubSub messages and broadcast them to channel subscribers
+  # Handle PubSub messages and push them directly to the client
   def handle_info({:create_bookmark, attrs, tags}, socket) do
-    broadcast!(socket, "bookmark:created", %{
+    push(socket, "bookmark:created", %{
       title: attrs["title"],
       description: attrs["description"],
       url: attrs["url"],
@@ -23,7 +23,7 @@ defmodule NastyWeb.BookmarkFeedChannel do
   end
 
   def handle_info({:update_bookmark, bookmark, attrs, tags}, socket) do
-    broadcast!(socket, "bookmark:updated", %{
+    push(socket, "bookmark:updated", %{
       id: bookmark.id,
       title: attrs["title"],
       description: attrs["description"],
@@ -36,7 +36,7 @@ defmodule NastyWeb.BookmarkFeedChannel do
   end
 
   def handle_info({:delete_bookmark, bookmark}, socket) do
-    broadcast!(socket, "bookmark:deleted", %{
+    push(socket, "bookmark:deleted", %{
       id: bookmark.id,
       timestamp: DateTime.utc_now()
     })
