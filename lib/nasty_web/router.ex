@@ -18,18 +18,32 @@ defmodule NastyWeb.Router do
     plug NastyWeb.APIAuthPlug
   end
 
+  # Create a new pipeline for public API endpoints
+  pipeline :public_api do
+    plug :accepts, ["json"]
+  end
+
   scope "/", NastyWeb do
     pipe_through :browser
 
     get "/", PageController, :home
+    live "/scramble", ScrambleLive, :index
   end
 
+  # Protected API endpoints
   scope "/api", NastyWeb.API do
     pipe_through :api
 
     post "/bookmarks", BookmarkController, :create
     put "/bookmarks/:id", BookmarkController, :update
     delete "/bookmarks/:id", BookmarkController, :delete
+  end
+
+  # Public API endpoints
+  scope "/api", NastyWeb.API do
+    pipe_through :public_api
+
+    get "/scramble", ScrambleController, :index
   end
 
   # Other scopes may use custom stacks.

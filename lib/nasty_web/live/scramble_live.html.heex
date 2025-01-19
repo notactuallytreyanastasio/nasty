@@ -1,0 +1,29 @@
+<div class="min-h-screen bg-black text-fuchsia-500 font-mono p-4 relative">
+  <div class="mb-4 text-cyan-400">
+    <span class="animate-pulse">$</span> scramble.exe --random-bookmarks={@max_bookmarks}
+  </div>
+
+  <div class="relative w-full h-[80vh]">
+    <div
+      :for={%{bookmark: bookmark, position: pos} <- @bookmarks}
+      class="absolute w-64 p-3 border-2 border-cyan-500 bg-black/90 transition-all duration-1000 ease-in-out hover:z-50"
+      style={"top: #{pos.top}%; left: #{pos.left}%; transform: rotate(#{pos.rotation}deg);"}
+    >
+      <.link
+        href={bookmark.url}
+        target="_blank"
+        class="text-fuchsia-400 hover:text-cyan-400 font-bold text-sm mb-1 block"
+      >
+        {bookmark.title}
+      </.link>
+      <div class="flex flex-wrap gap-1">
+        <span
+          :for={tag <- bookmark.tags}
+          class="text-[10px] text-cyan-600 bg-cyan-950/30 px-1 rounded"
+        >
+          {tag.name}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
