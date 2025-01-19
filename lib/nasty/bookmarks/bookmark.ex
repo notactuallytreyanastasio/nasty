@@ -23,14 +23,6 @@ defmodule Nasty.Bookmarks.Bookmark do
     |> assoc_constraint(:user)
   end
 
-  def new_changeset do
-    %__MODULE__{
-      public: true,
-      tags: []
-    }
-    |> changeset(%{})
-  end
-
   defp validate_url(changeset, field) do
     validate_change(changeset, field, fn _, url ->
       case URI.parse(url) do

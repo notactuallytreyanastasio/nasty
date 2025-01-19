@@ -15,7 +15,7 @@ defmodule NastyWeb.BookmarkLive do
      socket
      |> assign(:bookmarks, list_bookmarks(socket))
      |> assign(:show_modal, false)
-     |> assign(:form, to_form(Bookmark.new_changeset()))}
+     |> assign(:form, to_form(Bookmark.changeset(%Bookmark{}, %{user_id: current_user.id})))}
   end
 
   @impl true
@@ -73,7 +73,7 @@ defmodule NastyWeb.BookmarkLive do
   # Private helper to get bookmarks for the current user
   defp list_bookmarks(%{assigns: %{current_user: current_user}}) do
     Logger.info("Fetching bookmarks for user #{current_user.id}")
-    bookmarks = Bookmarks.list_bookmarks(current_user.id)
+    bookmarks = Bookmarks.list_bookmarks(current_user.id) |> Bookmarks.preload_tags()
     Logger.info("Found #{length(bookmarks)} bookmarks")
     bookmarks
   end
@@ -89,4 +89,5 @@ defmodule NastyWeb.BookmarkLive do
       !MapSet.member?(existing_ids, bookmark.id)
     end)
   end
+
 end
