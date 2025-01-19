@@ -28,13 +28,22 @@
           class="flex flex-col p-3 border-cyan-500"
           style="border-width: 0 1px 1px 0"
         >
-          <.link
-            href={bookmark.url}
-            target="_blank"
-            class="text-fuchsia-400 hover:text-cyan-400 font-bold text-sm mb-1"
-          >
-            {bookmark.title}
-          </.link>
+          <div class="flex justify-between items-start">
+            <.link
+              href={bookmark.url}
+              target="_blank"
+              class="text-fuchsia-400 hover:text-cyan-400 font-bold text-sm mb-1"
+            >
+              {bookmark.title}
+            </.link>
+            <button
+              phx-click="open-chat"
+              phx-value-id={bookmark.id}
+              class="text-cyan-400 hover:text-fuchsia-400 text-xs"
+            >
+              [chat]
+            </button>
+          </div>
           <div class="flex flex-wrap gap-1">
             <span
               :for={tag <- bookmark.tags}
@@ -107,4 +116,12 @@
       </.form>
     </div>
   </div>
+
+  <.live_component
+    :if={@show_chat}
+    module={NastyWeb.ChatComponent}
+    id={"chat-#{@chat_bookmark.id}"}
+    bookmark={@chat_bookmark}
+    current_user={@current_user}
+  />
 </div>

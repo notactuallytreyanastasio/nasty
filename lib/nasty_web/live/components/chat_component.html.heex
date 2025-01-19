@@ -1,0 +1,29 @@
+<div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+  <div class="bg-black border-2 border-cyan-500 p-6 max-w-2xl w-full mx-4 h-[80vh] flex flex-col">
+    <div class="flex justify-between items-center mb-4">
+      <div class="text-cyan-400">
+        <span class="animate-pulse">$</span> chat.exe --bookmark="{@bookmark.title}"
+      </div>
+      <button phx-click="close-chat" class="text-cyan-500 hover:text-fuchsia-500">
+        <span class="text-xl">[x]</span>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto mb-4 space-y-4">
+      <div :for={message <- @messages} class="flex gap-2">
+        <span class="text-cyan-500">{message.user.email}:</span>
+        <span class="text-fuchsia-400">{message.content}</span>
+      </div>
+    </div>
+
+    <.form for={@form} phx-submit="send" phx-target={@myself} class="flex gap-2">
+      <input type="text" name="content" value={@form[:content].value}
+        class="flex-1 bg-black border-2 border-cyan-500 text-fuchsia-400 p-2"
+        placeholder="Enter message..."
+      />
+      <button class="border-2 border-cyan-500 px-4 py-2 text-cyan-400 hover:text-fuchsia-400">
+        Send
+      </button>
+    </.form>
+  </div>
+</div>

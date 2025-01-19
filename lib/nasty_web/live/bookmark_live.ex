@@ -14,6 +14,8 @@ defmodule NastyWeb.BookmarkLive do
      socket
      |> assign(:bookmarks, user_bookmarks(socket))
      |> assign(:show_modal, false)
+     |> assign(:show_chat, false)
+     |> assign(:chat_bookmark, nil)
      |> assign(:form, to_form(Bookmark.new_changeset()))}
   end
 
@@ -65,6 +67,16 @@ defmodule NastyWeb.BookmarkLive do
       {:error, changeset} ->
         {:noreply, assign(socket, form: to_form(changeset))}
     end
+  end
+
+  @impl true
+  def handle_event("open-chat", %{"id" => id}, socket) do
+    bookmark = Bookmarks.get_bookmark!(id)
+    {:noreply, assign(socket, show_chat: true, chat_bookmark: bookmark)}
+  end
+
+  def handle_event("close-chat", _, socket) do
+    {:noreply, assign(socket, show_chat: false, chat_bookmark: nil)}
   end
 
   defp user_bookmarks(%{assigns: %{current_user: current_user}}) do
