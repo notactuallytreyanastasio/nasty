@@ -41,7 +41,8 @@ defmodule Nasty.Traffic.Simulator do
     tags = SampleData.generate_tags() |> Enum.join(", ")
 
     PubSub.broadcast_create(bookmark_attrs, tags)
-    Logger.info("Simulated traffic: Broadcasting bookmark creation '#{title}' for user #{user.email}")
+    # Logger.info("Simulated traffic: Broadcasting bookmark creation '#{title}' for user #{user.email}")
+    :ok
   end
 
   defp schedule_simulation do

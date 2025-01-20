@@ -17,7 +17,7 @@ The repo provided isn't guaranteed an exact reflection of what we are talking ab
 
 How do we get there
 - Users: [Hand Wave away]
-- Adding Bookmarks, and Tags 
+- Adding Bookmarks, and Tags
 - A Cache Layer To Start
 - Adding PubSub
 - Simulating Traffic
@@ -91,7 +91,7 @@ defmodule Nasty.Bookmarks.Bookmark do
   end
 end
 ```
-Simple enough. 
+Simple enough.
 This is just represents everything in standard ecto and leverages some URI parsing to check URLs.
 Nex we represent a bookmark tag.
 
@@ -213,7 +213,202 @@ Give it a `mix do deps.get, compile, ecto.create, ecto.migrate, phx.server` and 
 ```
 $ mix do deps.get, compile, ecto.create, ecto.migrate
 $ iex -S mix phx.server
+iex> alias Nasty.Bookmarks.Bookmark
+iex> alias Nasty.Accounts.User
+iex> alias Nasty.Bookmarks.Tag
+iex> alias Nasty.Repo
+iex> # or however you wanna get your user
+iex> user = Repo.all(User) |> List.last
+iex> bm = %Bookmark{
+  title: "My stuff",
+  url: "https://google.com",
+  description: "winning",
+  user: user,
+  tags: []
+} |> Repo.insert
+{:ok,
+ %Nasty.Bookmarks.Bookmark{
+   __meta__: #Ecto.Schema.Metadata<:loaded, "bookmarks">,
+   id: 2886,
+   title: "My stuff",
+   description: "winning",
+   url: "https://google.com",
+   public: true,
+   user_id: 9,
+   user: #Nasty.Accounts.User<
+     __meta__: #Ecto.Schema.Metadata<:loaded, "users">,
+     id: 9,
+     email: "jim@fung.net",
+     confirmed_at: nil,
+     inserted_at: ~U[2025-01-19 01:17:12Z],
+     updated_at: ~U[2025-01-19 01:17:12Z],
+     ...
+   >,
+   tags: [],
+   inserted_at: ~N[2025-01-20 05:49:37],
+   updated_at: ~N[2025-01-20 05:49:37]
+ }}
 ```
+
+Great, so we can insert bookmarks, and lets just assume we have tags working (they do).
+
+Next, we want to start thinking about the higher order usage of our system.
+
+This isn't just a bookmarking tool, we want people to build on top of the feeds of bookmarks coming in as things develop.
+
+In order to work towards a pubsub system, first we will need an in-memory store representing all of this so that we can track these records dynamically.
+
+These cache setups in ETS are very easy in Elixir/Erlang, and really shine here.
+
+We can have the ETS process listen to pubsub messages, and write accordingly.
+
+Let's take a look at our highest level layer: `Cache`.
+
+```elixir
+defmodule Nasty.Bookmarks.Cache do
+  use GenServer
+  require Logger
+
+  alias Nasty.Bookmarks.Bookmark
+  alias Nasty.Bookmarks.PubSub
+  alias Nasty.Repo
+
+  @table_name :bookmarks_cache
+
+  def start_link(_) do
+    GenServer.start_link(__MODULE__, [], name: __MODULE__)
+  end
+
+  def init(_) do
+    table = :ets.new(@table_name, [:set, :protected, :named_table])
+    {:ok, %{table: table}, {:continue, :load_bookmarks}}
+  end
+
+  # Handle direct cache updates instead of PubSub messages
+  def handle_cast({:create_bookmark, attrs, tags}, state) do
+    case Nasty.Bookmarks.do_create_bookmark(attrs, tags) do
+      {:ok, bookmark} ->
+        update_cache(bookmark)
+
+      {:error, changeset} ->
+        Logger.error("Failed to create bookmark in cache: #{inspect(changeset.errors)}")
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:update_bookmark, bookmark, attrs, tags}, state) do
+    case Nasty.Bookmarks.do_update_bookmark(bookmark, attrs, tags) do
+      {:ok, updated_bookmark} ->
+        update_cache(updated_bookmark)
+
+      {:error, changeset} ->
+        Logger.error("Failed to update bookmark in cache: #{inspect(changeset.errors)}")
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:delete_bookmark, bookmark}, state) do
+    case Nasty.Bookmarks.do_delete_bookmark(bookmark) do
+      {:ok, _} ->
+        delete_from_cache(bookmark)
+
+      {:error, changeset} ->
+        Logger.error("Failed to delete bookmark from cache: #{inspect(changeset.errors)}")
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_continue(:load_bookmarks, state) do
+    bookmarks =
+      Bookmark
+      |> Repo.all()
+      |> Repo.preload([:tags, :user])
+      |> Enum.group_by(& &1.user_id)
+
+    :ets.insert(@table_name, {:all_bookmarks, bookmarks})
+    {:noreply, state}
+  end
+
+  def get_user_bookmarks(user_id) do
+    case :ets.lookup(@table_name, :all_bookmarks) do
+      [{:all_bookmarks, bookmarks}] ->
+        bookmarks
+        |> Map.get(user_id, [])
+        |> Enum.sort_by(& &1.inserted_at, :desc)
+
+      [] ->
+        []
+    end
+  end
+
+  def get_public_bookmarks do
+    case :ets.lookup(@table_name, :all_bookmarks) do
+      [{:all_bookmarks, bookmarks}] ->
+        bookmarks
+        |> Map.values()
+        |> List.flatten()
+        |> Enum.filter(& &1.public)
+        |> Enum.sort_by(& &1.inserted_at, :desc)
+
+      [] ->
+        []
+    end
+  end
+
+  def update_cache(%Bookmark{} = bookmark) do
+    GenServer.cast(__MODULE__, {:update_bookmark, bookmark})
+  end
+
+  def delete_from_cache(%Bookmark{} = bookmark) do
+    GenServer.cast(__MODULE__, {:delete_bookmark, bookmark})
+  end
+
+  # Server callbacks
+
+  def handle_cast({:update_bookmark, bookmark}, state) do
+    bookmark = Repo.preload(bookmark, [:tags, :user])
+
+    [{:all_bookmarks, bookmarks}] = :ets.lookup(@table_name, :all_bookmarks)
+    user_bookmarks = Map.get(bookmarks, bookmark.user_id, [])
+
+    # Remove old version if it exists
+    updated_user_bookmarks =
+      user_bookmarks
+      |> Enum.reject(&(&1.id == bookmark.id))
+
+    # Add new bookmark to beginning or end based on ownership
+    updated_user_bookmarks =
+      if bookmark.user_id == bookmark.user_id do
+        [bookmark | updated_user_bookmarks]
+      else
+        updated_user_bookmarks ++ [bookmark]
+      end
+      |> Enum.sort_by(& &1.inserted_at, :desc)
+
+    updated_bookmarks = Map.put(bookmarks, bookmark.user_id, updated_user_bookmarks)
+    :ets.insert(@table_name, {:all_bookmarks, updated_bookmarks})
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:delete_bookmark, bookmark}, state) do
+    [{:all_bookmarks, bookmarks}] = :ets.lookup(@table_name, :all_bookmarks)
+    user_bookmarks = Map.get(bookmarks, bookmark.user_id, [])
+
+    updated_user_bookmarks = Enum.reject(user_bookmarks, &(&1.id == bookmark.id))
+    updated_bookmarks = Map.put(bookmarks, bookmark.user_id, updated_user_bookmarks)
+    :ets.insert(@table_name, {:all_bookmarks, updated_bookmarks})
+
+    {:noreply, state}
+  end
+end
+```
+Now, this is quite a bit, but we can break it down piece by piece, and we'll explore related pieces and then come back to reference this as we go along.
+
+We can start by playing in IEx with this interface
 
 ## PubSub
 ## Traffic
@@ -386,5 +581,3 @@ Now we can move through all of this with a `mix ecto.gen.migration` command.
 With that, we can consider the basics scaffolded here.
 We have bookmarks, we have users, and we have tags.
 We can generate some simple migrations for all of this:
-
-

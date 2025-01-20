@@ -17,7 +17,9 @@ defmodule Nasty.Application do
         {Finch, name: Nasty.Finch},
         # Start to serve requests, typically the last entry
         NastyWeb.Endpoint,
-        Nasty.Bookmarks.Cache
+        Nasty.Bookmarks.Cache,
+        Nasty.Traffic.BookmarkSimulator,
+        Nasty.Traffic.ChatSimulator
       ] ++ simulation_children()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
