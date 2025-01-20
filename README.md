@@ -410,6 +410,32 @@ Now, this is quite a bit, but we can break it down piece by piece, and we'll exp
 
 We can start by playing in IEx with this interface
 
+```
+iex> alias Nasty.Bookmarks.Cache
+iex> alias Nasty.Bookmarks.Bookmark
+iex> alias Nasty.Repo
+iex> alias Nasty.Accounts.User
+iex> user = Repo.all(User) |> List.first
+iex> Nasty.Bookmarks.Cache.start_link([])
+iex> GenServer.cast(
+  Nasty.Bookmarks.Cache,
+  {
+    :create_bookmark,
+    %{url: "https://foo.com", title: "bar", description: "baz", public: true, user_id: user.id},
+    []
+  }
+)
+:ok
+```
+
+Now, if we go in and look at things with `:ets.all` we can see that we have a table with all of our bookmarks.
+
+This starting interface is pretty simple.
+We are just talking to it like a normal GenServer, because it is.
+
+We gave it an initialization with its name and did the same for the ETS table/cache.
+This lets us simply talk to it just like we see above with any `GenServer.cast`.
+
 ## PubSub
 ## Traffic
 ## A LiveView Showing the Link Feed
