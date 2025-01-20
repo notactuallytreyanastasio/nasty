@@ -42,7 +42,11 @@ Users have bookmarks.
 Bookmarks have a title, description, url, public/not public bool, tags, and a user.
 Tags are a many to many relationship on tags lumping them into categories.
 
-We can map these out pretty quickly:
+### Every Step in this has a commit we can checkout of the [sibling repo](https://github.com/robertgrayson/nasty_clone), they will be highlighted in each section and you can clone that repo and check out each commit if you are following along and can't get something to compile
+
+We can map these out pretty quickly.
+
+### A Basic Data Model and Layer
 
 ```elixir
 defmodule Nasty.Bookmarks.Bookmark do
@@ -210,12 +214,10 @@ end
 
 Give it a `mix do deps.get, compile, ecto.create, ecto.migrate, phx.server` and lets see if we can create anything.
 
-```
+```elixir
 $ mix do deps.get, compile, ecto.create, ecto.migrate
 $ iex -S mix phx.server
 iex> alias Nasty.Bookmarks.Bookmark
-iex> alias Nasty.Accounts.User
-iex> alias Nasty.Bookmarks.Tag
 iex> alias Nasty.Repo
 iex> bm = %Bookmark{
   title: "My stuff",
@@ -231,16 +233,6 @@ iex> bm = %Bookmark{
    description: "winning",
    url: "https://google.com",
    public: true,
-   user_id: 9,
-   user: #Nasty.Accounts.User<
-     __meta__: #Ecto.Schema.Metadata<:loaded, "users">,
-     id: 9,
-     email: "jim@fung.net",
-     confirmed_at: nil,
-     inserted_at: ~U[2025-01-19 01:17:12Z],
-     updated_at: ~U[2025-01-19 01:17:12Z],
-     ...
-   >,
    tags: [],
    inserted_at: ~N[2025-01-20 05:49:37],
    updated_at: ~N[2025-01-20 05:49:37]
@@ -281,16 +273,13 @@ defmodule Nasty.Bookmarks.Cache do
     {:ok, %{table: table}, {:continue, :load_bookmarks}}
   end
 
-  # Handle direct cache updates instead of PubSub messages
   def handle_cast({:create_bookmark, attrs, tags}, state) do
-
-    # TODO tags
+    # TODO handle tags
     GenServer.cast(__MODULE__, {:update_bookmark, attrs})
     {:noreply, state}
   end
 
   # Server callbacks
-
   def handle_cast({:update_bookmark, bookmark}, state) do
     bookmarks = :ets.tab2list(@table_name)
     updated_bookmarks = [bookmark | bookmarks]
@@ -328,6 +317,37 @@ This enforces no typing contract of what an entry in here looks like, and we hav
 Let's instead wire things up to use `Bookmark` structs that are representing the Ecto table.
 
 Since this is all native Elixir, we can just have the Ecto struct can just be the one that the cache uses too.
+
+```elixir
+  ## cache.ex
+defmodule NastyClone.Bookmarks.Cache do
+  alias Nasty.Bookmarks.Bookmark
+  # --- snip ---
+  def handle_cast({:create_bookmark, attrs = %{title: title, description: description, url: url, public: public}, tags}, state) do
+    bookmark = %Bookmark{
+      title: title,
+      description: description,
+      url: url,
+      public: public,
+      # TODO tags
+      # tags: tags
+    }
+
+    GenServer.cast(__MODULE__, {:update_bookmark, bookmark})
+    {:noreply, state}
+  end
+
+  def handle_cast({:create_bookmark, attrs, tags}, state) do
+    Logger.error("Invalid props given to :create_bookmark. provide title, description, url, and public")
+  end
+  # --- snip ---
+```
+
+Now, we are at least passing around `Bookmark` structs.
+We are still hand waving away tags, but we can come back to that.
+We at least are enforcing the shape of the data that we are passing around.
+
+For now, let's create a common interface for the cache and also back this into Postgres.
 
 ## PubSub
 ## Traffic
