@@ -1,35 +1,45 @@
 # Building a little bookmarking thing in Elixir/Phoenix/LiveView (1.0)
-I wanted to build something in LiveView with the 1.0 release that kind of touched all the best parts of Phoenix and LiveView.
-So, this is a stab at that. What we end up with is a Bookmarking tracker that publishes a firehose of events for each bookmark being created, and each piece of discussion around the bookmarks.
-We also bake in some caching that shows very fast response times.
-We build a means to simulate traffic for the entire system that is self-contained but highly useful.
-All of this is handled over pubsub and websockets.
-On top of all this, we build it with a minimal amount of code.
+This guide explores building a feature-rich bookmarking application that showcases many of the powerful capabilities of Elixir, Phoenix, and LiveView.
+We'll create a system that publishes real-time events for bookmark creation and discussions, leveraging process-based messaging between domain models and event-driven architecture.
+The application will demonstrate how to build reactive web UIs, implement efficient caching layers, and handle complex pub/sub patterns through websockets.
 
-## Goals
-This is a high level guide.
-The repo provided isn't guaranteed an exact reflection of what we are talking about.
+I really wanted to build something that could be a talking point that shows off all my favorite touchpoints of modern Elixir/Phoenix development.
 
-- Publish a stream of bookmarks (cool links) and chats (commentary on the links)
-- Organize bookmark feed by tag subscription
-- Serve webpage showing link feed of firehose
-- Serve webpage showing 20 random links or something
+This guide doesn't even get into the great new stuff with the type system, but it goes a long way towards showing how all the pieces fit together.
 
-How do we get there
-- Users: [Hand Wave away]
-- Adding Bookmarks, and Tags
-- A Cache Layer To Start
-- Adding PubSub
-- Simulating Traffic
-- A Basic LiveView Showing The Feed
-- Backing it in Postgres
-- A Cache Layer to Start
-- Publishing A Firehose of Events
-- Publishing Events In A Filtered Manner
+Along the way, we'll explore how the BEAM VM enables us to create robust, concurrent systems.
+We'll build a traffic simulator to test our application at scale, implement channel-based event publishing, and see how Phoenix and LiveView make traditionally complex features surprisingly straightforward to implement.
+The end result will be a fully functional bookmarking system that handles real-time updates, filtered feeds, and cached responses - all with clean, maintainable code.
 
-#### This is a post exploring how to build all of this up in general
-However, it isn't an 'exact guide'.
-But, the premises here are pretty portable and you should be able to take them away and apply them to a large swath of other concepts.
+This is meant to be an approachable guide for developers looking to understand how these pieces fit together in practice.
+We'll start from a fresh Phoenix application and incrementally add features, explaining the concepts and patterns as we go.
+The focus is on showing how Elixir and Phoenix can elegantly handle complex requirements while keeping the codebase simple and understandable.
+
+### We will go so far as to provide a commit for each major step of the way along the project so even if you are a little unclear, you can follow along
+
+## Project Overview
+Let's break down how we'll implement the features mentioned above. While this guide provides a high-level overview, the accompanying repo serves as a reference implementation that may differ slightly in details.
+
+Key Features:
+- Real-time bookmark and chat streams
+- Tag-based feed filtering
+- Live firehose view of all bookmarks
+- Randomized bookmark discovery page
+
+Implementation Path:
+- User authentication (simplified for this guide)
+- Core bookmark and tag models
+- In-memory caching layer
+- PubSub event system
+- Traffic simulation for testing
+- LiveView UI components
+- PostgreSQL persistence
+- Event broadcasting system
+  - Global firehose events
+  - Tag-filtered events
+
+While this guide focuses on building a bookmarking system, the patterns and approaches demonstrated here can be applied to many other real-time, event-driven applications.
+The concepts of caching, pub/sub messaging, and LiveView UIs are foundational for modern Phoenix applications.
 
 ## Getting Started
 We want to start off with a basic new Phoenix LiveView project.
@@ -238,7 +248,7 @@ iex> bm = %Bookmark{
    updated_at: ~N[2025-01-20 05:49:37]
  }}
 ```
-
+#### Commit 53aca37178085861a4523d2b9c214b861dee843d
 Great, so we can insert bookmarks, and lets just assume we have tags working (they do).
 
 Next, we want to start thinking about the higher order usage of our system.
@@ -257,10 +267,6 @@ Let's take a look at our highest level layer: `Cache`.
 defmodule Nasty.Bookmarks.Cache do
   use GenServer
   require Logger
-
-  alias Nasty.Bookmarks.Bookmark
-  alias Nasty.Bookmarks.PubSub
-  alias Nasty.Repo
 
   @table_name :bookmarks_cache
 
@@ -281,9 +287,8 @@ defmodule Nasty.Bookmarks.Cache do
 
   # Server callbacks
   def handle_cast({:update_bookmark, bookmark}, state) do
-    bookmarks = :ets.tab2list(@table_name)
-    updated_bookmarks = [bookmark | bookmarks]
-    :ets.insert(@table_name, {:all_bookmarks, updated_bookmarks})
+    [{:all_bookmarks, bookmarks}] = :ets.lookup(@table_name, :all_bookmarks)
+    :ets.insert(@table_name, {:all_bookmarks, bookmarks ++ [bookmark]})
     {:noreply, state}
   end
 
@@ -339,6 +344,7 @@ defmodule NastyClone.Bookmarks.Cache do
 
   def handle_cast({:create_bookmark, attrs, tags}, state) do
     Logger.error("Invalid props given to :create_bookmark. provide title, description, url, and public")
+    {:noreply, state}
   end
   # --- snip ---
 ```
@@ -347,7 +353,37 @@ Now, we are at least passing around `Bookmark` structs.
 We are still hand waving away tags, but we can come back to that.
 We at least are enforcing the shape of the data that we are passing around.
 
+```elixir
+iex> alias NastyClone.Bookmarks.Cache
+NastyClone.Bookmarks.Cache
+iex> Cache.start_link(nil)
+{:ok, #PID<0.358.0>}
+iex> GenServer.cast(NastyClone.Bookmarks.Cache, {:create_bookmark, %{url: "https://bizzle.com", title: "baz", description: "bizz", public: true}, []})
+:ok
+iex> :ets.tab2list(:bookmarks_cache)
+[
+  all_bookmarks: [
+    %NastyClone.Bookmarks.Bookmark{
+      __meta__: #Ecto.Schema.Metadata<:built, "bookmarks">,
+      id: nil,
+      title: "baz",
+      description: "bizz",
+      url: "https://bizzle.com",
+      public: true,
+      user_id: nil,
+      user: #Ecto.Association.NotLoaded<association :user is not loaded>,
+      tags: #Ecto.Association.NotLoaded<association :tags is not loaded>,
+      inserted_at: nil,
+      updated_at: nil
+    }
+  ]
+]
+```
+
+#### Commit 818e3d65422581e03538544d905b292e2960aefa
+
 For now, let's create a common interface for the cache and also back this into Postgres.
+
 
 ## PubSub
 ## Traffic
