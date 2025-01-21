@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle form submission
     document.getElementById('bookmarkForm').addEventListener('submit', function(e) {
       e.preventDefault();
-
       const bookmark = {
         title: document.getElementById('title').value,
         url: currentTab.url,
@@ -26,8 +25,6 @@ document.addEventListener('DOMContentLoaded', function() {
 async function saveBookmark(bookmark) {
   const statusDiv = document.getElementById('status');
   try {
-    console.log('Sending bookmark:', bookmark);
-
     const response = await fetch('http://localhost:4000/api/bookmarks', {
       method: 'POST',
       headers: {
@@ -37,12 +34,7 @@ async function saveBookmark(bookmark) {
       body: JSON.stringify({ bookmark }),
     });
 
-    console.log('Response status:', response.status);
-
-    // Log the raw response text first
     const responseText = await response.text();
-    console.log('Raw response:', responseText);
-
     let data;
     try {
       data = JSON.parse(responseText);
@@ -58,7 +50,7 @@ async function saveBookmark(bookmark) {
 
     statusDiv.style.color = '#00ff00';
     statusDiv.textContent = 'Bookmark saved!';
-    setTimeout(() => window.close(), 1000);
+    setTimeout(() => window.close(), 3000);
   } catch (error) {
     console.error('Error:', error);
     statusDiv.textContent = `Error: ${error.message}`;

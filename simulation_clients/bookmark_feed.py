@@ -28,7 +28,7 @@ async def connect_to_feed():
                     print("\n=== New Bookmark ===")
                     print(f"Title: {data['payload']['title']}")
                     print(f"URL: {data['payload']['url']}")
-                    print(f"Tags: {', '.join(data['payload']['tags'])}")
+                    print(f"Tags: {data['payload']['tags']}")
                 elif data.get("event") == "bookmark:updated":
                     print(json.dumps(data["payload"], indent=2))
                 elif data.get("event") == "bookmark:deleted":
