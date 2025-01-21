@@ -1,4 +1,16 @@
 # Building a little bookmarking thing in Elixir/Phoenix/LiveView (1.0)
+## Initial Thoughts
+At first, I built this on a Saturday.
+I started the project at around 1pm and made the last major commits by about midnight.
+
+I was able to move this fast because I used an LLM to assist me.
+
+To reflect on the other topic I want to write about, using LLMs to build software today, and learning the tools, I decided to prove I knew how to build this by taking the finished product and breaking it down into bite size pieces that can become a tutorial that builds up the premises step by step.
+
+So, from there, here we go
+
+## Goals
+
 This guide explores building a feature-rich bookmarking application that showcases many of the powerful capabilities of Elixir, Phoenix, and LiveView.
 We'll create a system that publishes real-time events for bookmark creation and discussions, leveraging process-based messaging between domain models and event-driven architecture.
 The application will demonstrate how to build reactive web UIs, implement efficient caching layers, and handle complex pub/sub patterns through websockets.
