@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Nasty Bookmarker</title>
+  <style>
+    body {
+      width: 400px;
+      padding: 16px;
+      font-family: monospace;
+      background: black;
+      color: #ff00ff;
+    }
+    input, textarea {
+      width: 100%;
+      margin: 8px 0;
+      padding: 8px;
+      background: #111;
+      border: 1px solid #00ffff;
+      color: #00ffff;
+      font-family: monospace;
+    }
+    button {
+      width: 100%;
+      padding: 8px;
+      background: #00ffff;
+      border: none;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+      font-family: monospace;
+    }
+    button:hover {
+      background: #ff00ff;
+    }
+    .error {
+      color: #ff0000;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <form id="bookmarkForm">
+    <input type="text" id="title" placeholder="Title" required>
+    <input type="text" id="tags" placeholder="Tags (comma separated)">
+    <textarea id="description" placeholder="Description" rows="3"></textarea>
+    <button type="submit">Save Bookmark</button>
+  </form>
+  <div id="status" class="error"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
