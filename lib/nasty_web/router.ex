@@ -15,7 +15,6 @@ defmodule NastyWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
-    plug NastyWeb.APIAuthPlug
   end
 
   # Create a new pipeline for public API endpoints

@@ -3,7 +3,13 @@
   "name": "Nasty Bookmarker",
   "version": "1.0",
   "description": "Quick bookmark saver for Nasty",
-  "permissions": ["activeTab", "storage"],
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:4000/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

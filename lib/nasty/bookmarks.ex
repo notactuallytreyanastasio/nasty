@@ -16,7 +16,7 @@ defmodule Nasty.Bookmarks do
 
   def create_bookmark(attrs \\ %{}, tags) do
     PubSub.broadcast_create(attrs, tags)
-    {:ok, :creating}
+    {:ok, attrs}
   end
 
   def update_bookmark(%Bookmark{} = bookmark, attrs, tags) do

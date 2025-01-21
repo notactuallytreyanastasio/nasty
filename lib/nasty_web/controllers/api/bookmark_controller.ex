@@ -7,30 +7,48 @@ defmodule NastyWeb.API.BookmarkController do
 
   action_fallback NastyWeb.FallbackController
 
-  def create(conn, %{"bookmark" => params}) do
-    # TODO: Add proper auth - for now just get first user
+  def create(conn, params) do
     user = Accounts.get_user!(1)
 
-    bookmark_params = Map.put(params, "user_id", user.id)
-    tags = Map.get(params, "tags", "")
+    bookmark_params = params["bookmark"]
+    |> Map.put("user_id", user.id)
 
-    case Bookmarks.create_bookmark(bookmark_params, tags) do
+    tags = String.split(Map.get(params["bookmark"], "tags", ""), ",")
+    y = Bookmarks.create_bookmark(bookmark_params, tags)
+    case y do
       {:ok, bookmark} ->
+        tags = Map.get(bookmark, "tags")
         conn
         |> put_status(:created)
+        # we just trust that they like, really created it right?
+        # lol this is so useless to a user but it illustrates
+        # the point because youre just sending it into the void
+        # that is the higher order feed via pubsub for consumption
+        # its totally async and should have another means of
+        # doing the actual creation here than if it was the web UI
+        # but lets just pretend when they make the bookmarklet
+        # work in their browser they have a magic token that lets
+        # them publish and if it ever fails to match (we change it here)
+        # then they cannot publish at all and we 403
         |> json(%{
-          id: bookmark.id,
-          title: bookmark.title,
-          url: bookmark.url,
-          description: bookmark.description,
-          tags: Enum.map(bookmark.tags, & &1.name)
-        })
+          title: Map.get(bookmark, "title"),
+          url: Map.get(bookmark, "url"),
+          description: Map.get(bookmark, :description),
+          tags: tags
+        }) |> IO.inspect
 
       {:error, changeset} ->
+        IO.inspect(changeset, label: "Changeset errors")
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{errors: format_errors(changeset)})
     end
+  rescue
+    e ->
+      IO.inspect(e, label: "Error")
+      conn
+      |> put_status(:internal_server_error)
+      |> json(%{error: "Internal server error", details: Exception.message(e)})
   end
 
   def update(conn, %{"id" => id, "bookmark" => bookmark_params}) do

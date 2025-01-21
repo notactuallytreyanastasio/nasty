@@ -55,9 +55,10 @@ defmodule NastyWeb.Endpoint do
   plug Plug.Session, @session_options
 
   plug Corsica,
-    origins: ["chrome-extension://*"],
-    allow_headers: :all,
-    allow_credentials: true
+    origins: ["chrome-extension://*", "http://localhost:4000"],
+    allow_headers: ["content-type"],
+    allow_methods: ["POST"],
+    log: [rejected: :error, invalid: :warn, accepted: :debug]
 
   plug NastyWeb.Router
 end
