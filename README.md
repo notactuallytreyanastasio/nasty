@@ -120,6 +120,7 @@ defmodule Nasty.Bookmarks.Bookmark do
   end
 end
 ```
+
 Simple enough.
 This is just represents everything in standard ecto and leverages some URI parsing to check URLs.
 Nex we represent a bookmark tag.
@@ -659,6 +660,144 @@ curl -X POST http://localhost:4000/api/bookmarks \
 Next, we kind of hand wave away building a Chrome extension.
 It's super simple and you can skip it and just follow the advice in line 2 of the section.
 
+
+
+## Traffic
+Now, for this to be interesting, we need to simulate some traffic to consume this firehose feed, and we need to have some clients active to see any of this happening.
+
+We will quickly make a python client to listen to the firehose, and then we will also make a GenServer that will create bookmarks as if it were an API request as well.
+
+We will wrap this all up to run alongside the system if an environment variable is set, and if so start creating fake traffic.
+
+The only interesting thing we do here is start this up with the application at boot.
+We will see this after we look over this code for the simulator.
+The simulator itself just sends itself a message every 2 seconds to queue up sending another bookmark.
+
+```elixir
+defmodule NastyClone.Bookmarks.Simulator do
+  use GenServer
+  require Logger
+  alias NastyClone.Bookmarks
+
+  @interval 2_000 # 2 seconds between bookmarks = ~30 per minute
+  @adjectives ~w(Amazing Brilliant Clever Dynamic Elegant Fantastic Great Helpful Innovative Joyful)
+  @nouns ~w(Tutorial Guide Project Framework Library Tool Resource Platform Service Application)
+  @topics ~w(Elixir Phoenix JavaScript React Vue Angular Ruby Python Go Rust)
+
+  def start_link(_) do
+    GenServer.start_link(__MODULE__, [], name: __MODULE__)
+  end
+
+  @impl true
+  def init(_) do
+    schedule_next_bookmark()
+    {:ok, %{count: 0}}
+  end
+
+  # make it use the link generator above...
+  @impl true
+  def handle_info(:create_bookmark, state) do
+    create_random_bookmark()
+    schedule_next_bookmark()
+    {:noreply, %{state | count: state.count + 1}}
+  end
+
+  defp schedule_next_bookmark do
+    Process.send_after(self(), :create_bookmark, @interval)
+  end
+
+  defp create_random_bookmark do
+    LinkGenerator
+    adjective = Enum.random(@adjectives)
+    noun = Enum.random(@nouns)
+    topic = Enum.random(@topics)
+
+    title = "#{adjective} #{topic} #{noun}"
+    description = "A #{String.downcase(adjective)} #{String.downcase(noun)} for #{topic} developers"
+    url = generate_url(title)
+
+    bookmark_params = %{
+      "title" => title,
+      "description" => description,
+      "url" => url,
+      "public" => true
+    }
+
+    tags = [topic, String.downcase(noun)]
+
+    case Bookmarks.create(bookmark_params, tags) do
+      %{id: id} ->
+        Logger.info("Created simulated bookmark: #{title} (ID: #{id})")
+      _ ->
+        Logger.error("Failed to create simulated bookmark: #{title}")
+    end
+  end
+
+  defp generate_url(title) do
+    slug = title
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9\s]/, "")
+    |> String.replace(~r/\s+/, "-")
+
+    domains = [
+      "example.com",
+      "tutorial-site.dev",
+      "learn-tech.io",
+      "codebase.edu",
+      "dev-resources.net"
+    ]
+
+    "https://#{Enum.random(domains)}/#{slug}"
+  end
+end
+
+```
+
+If you are new to GenServers, this ones a great example of how we can have such nice tools out of the box.
+We have had quite a few more complicated ones, but this gets us a nice thing out of the box: recurring task running.
+
+Now, we start it up in `application.ex`
+
+```elixir
+  # snip
+  def start(_type, _args) do
+    children = [
+      NastyCloneWeb.Telemetry,
+      NastyClone.Repo,
+      {DNSCluster, query: Application.get_env(:nasty_clone, :dns_cluster_query) || :ignore},
+      {Phoenix.PubSub, name: NastyClone.PubSub},
+      # Start the Finch HTTP client for sending emails
+      {Finch, name: NastyClone.Finch},
+      # Start a worker by calling: NastyClone.Worker.start_link(arg)
+      # {NastyClone.Worker, arg},
+      # Start to serve requests, typically the last entry
+      NastyCloneWeb.Endpoint,
+      NastyClone.Bookmarks.Cache,
+      # our new line, the simulator
+      NastyClone.Bookmarks.Simulator
+    ]
+
+    # See https://hexdocs.pm/elixir/Supervisor.html
+    # for other strategies and supported options
+    opts = [strategy: :one_for_one, name: NastyClone.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+
+  # snip
+```
+
+With this, we will start seeing entries coming across the channel regularly.
+
+_Soon, we will see all of this come together quite gracefully, I promise._
+
+#### Commit ABCD
+
+## A LiveView Showing the Link Feed
+Finally, let's view all these links that are coming across the wire.
+This is where we get to see LiveView in action.
+
+
+## Filtered By Tag Publishing/Topic
 ## Chrome Extension
 We're going to handwave most of this away, because its not the point of the guide.
 
@@ -746,24 +885,4 @@ async function saveBookmark(bookmark) {
   }
 }
 ```
-
-## Traffic
-Now, for this to be interesting, we need to simulate some traffic to consume this firehose feed, and we need to have some clients active to see any of this happening.
-
-We will quickly make a python client to listen to the firehose, and then we will also make a GenServer that will create bookmarks as if it were an API request as well.
-
-We will wrap this all up to run alongside the system if an environment variable is set, and if so start creating fake traffic.
-
-For sample data, I am going to seed the first 1000 messages from the simulator with some reddit data.
-
-Consider this handwaved away, I saved it as a constant in a module.
-
-It's accessible with `Reddit.link`
-
-#### Commit ABCD
-
-
-
-## A LiveView Showing the Link Feed
-## Filtered By Tag Publishing/Topic
 ## Final Features, Reflections
