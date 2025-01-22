@@ -266,6 +266,9 @@ iex> bm = %Bookmark{
  }}
 ```
 #### Commit 53aca37178085861a4523d2b9c214b861dee843d
+
+<img width="695" alt="image" src="https://github.com/user-attachments/assets/46b17c70-a25e-4035-8552-31cb031e04d1" />
+
 Great, so we can insert bookmarks, and lets just assume we have tags working (they do).
 
 Next, we want to start thinking about the higher order usage of our system.
