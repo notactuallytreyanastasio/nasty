@@ -72,6 +72,7 @@ Tags are a many to many relationship on tags lumping them into categories.
 We can map these out pretty quickly.
 
 ### A Basic Data Model and Layer
+<img width="743" alt="image" src="https://github.com/user-attachments/assets/92cb3b89-829c-4e14-bccb-0ea82b035052" />
 
 ```elixir
 defmodule Nasty.Bookmarks.Bookmark do
