@@ -642,11 +642,22 @@ We are backing everything in postgres so we can load the prior cache state prett
 
 Restart your server, and give this a shot:
 
-```elixir
-
+```bash
+curl -X POST http://localhost:4000/api/bookmarks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bookmark": {
+      "title": "Example Site",
+      "description": "An example bookmark",
+      "url": "https://example.com",
+      "public": true,
+      "tags": ["example", "test"]
+    }
+  }'
 ```
 
-Next, we will
+Next, we kind of hand wave away building a Chrome extension.
+It's super simple and you can skip it and just follow the advice in line 2 of the section.
 
 ## Chrome Extension
 We're going to handwave most of this away, because its not the point of the guide.
@@ -736,8 +747,23 @@ async function saveBookmark(bookmark) {
 }
 ```
 
-Now, we need to add our endpoint to the router.
 ## Traffic
+Now, for this to be interesting, we need to simulate some traffic to consume this firehose feed, and we need to have some clients active to see any of this happening.
+
+We will quickly make a python client to listen to the firehose, and then we will also make a GenServer that will create bookmarks as if it were an API request as well.
+
+We will wrap this all up to run alongside the system if an environment variable is set, and if so start creating fake traffic.
+
+For sample data, I am going to seed the first 1000 messages from the simulator with some reddit data.
+
+Consider this handwaved away, I saved it as a constant in a module.
+
+It's accessible with `Reddit.link`
+
+#### Commit ABCD
+
+
+
 ## A LiveView Showing the Link Feed
 ## Filtered By Tag Publishing/Topic
 ## Final Features, Reflections

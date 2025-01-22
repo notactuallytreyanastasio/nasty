@@ -34,9 +34,16 @@ defmodule Nasty.Bookmarks do
   end
 
   def create_tag(attrs \\ %{}) do
-    %Tag{}
+    result = %Tag{}
     |> Tag.changeset(attrs)
     |> Repo.insert()
+
+    case result do
+      {:ok, tag} = success ->
+        Nasty.Bookmarks.TagPubSub.broadcast_create(tag)
+        success
+      error -> error
+    end
   end
 
   defp put_tags(changeset, tags) do
