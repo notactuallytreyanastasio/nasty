@@ -72,7 +72,18 @@ Tags are a many to many relationship on tags lumping them into categories.
 We can map these out pretty quickly.
 
 ### A Basic Data Model and Layer
-<img width="743" alt="image" src="https://github.com/user-attachments/assets/92cb3b89-829c-4e14-bccb-0ea82b035052" />
+For the unfamiliar, in Elixir, and generally in Phoenix, we use a library called Ecto to interact with our database.
+It may not feel quite like an ORM when you see it in use.
+Because, well, its not.
+Its a system to follow the repository pattern in order to allow us to interact with our database in a way that is both safe and easy to understand.
+
+So, to start off, we will define a `Schema` for each of the database tables we want.
+
+In this case, that will be creating bookmarks, tags, and bookmark_tags as a join table.
+
+The `schema` macro defines the general shape, and `changeset` is a function that allows us to define the shape of the data we want to insert into the database.
+
+Our migrations are generated with `mix ect.gen.migration your_migration_name` and you can put the contents we share below right in there.
 
 ```elixir
 defmodule Nasty.Bookmarks.Bookmark do
@@ -266,8 +277,6 @@ iex> bm = %Bookmark{
  }}
 ```
 #### Commit 53aca37178085861a4523d2b9c214b861dee843d
-
-<img width="695" alt="image" src="https://github.com/user-attachments/assets/46b17c70-a25e-4035-8552-31cb031e04d1" />
 
 Great, so we can insert bookmarks, and lets just assume we have tags working (they do).
 
@@ -522,13 +531,17 @@ defmodule NastyCloneWeb.BookmarkChannel do
 end
 ```
 
+### WRITINGTODO elaborate here
 This is pretty straightforward thanks to Phoenix's PubSub.
 We are simply handling a basic join when someone comes for the firehose, and then if a bookmark is created pushing it to the client over the socket.
 
+### WRITINGTODO Use less elixiry language
 They key point to take away is how now we dont have to handle the cast.
 We simple created the top level flow of data, and by subscribing, we can intercept exactly what we need and do with it as we please.
 In this case, that is handling the creation end to end.
 
+
+### WRITINGTODO explain what the user socket even does
 We need to make a generic user socket to start things with.
 
 ```elixir
@@ -548,6 +561,7 @@ defmodule NastyCloneWeb.UserSocket do
 end
 ```
 
+### WRITINGTODO explain what this means
 Now, for this channel to work, we need to add a subscription to the socket in our `endpoint.ex`
 
 ```elixir
@@ -556,6 +570,7 @@ Now, for this channel to work, we need to add a subscription to the socket in ou
     longpoll: false
 ```
 
+### WRITINGTODO Go into contexts, what they are, and how this wraps things up so nicely for so many interfaces (web, firehose client, bookmarklet, internal pubsub)
 And finally we make a final entrypoint to interface with Bookmarks now.
 
 ```elixir
@@ -801,7 +816,11 @@ Finally, let's view all these links that are coming across the wire.
 This is where we get to see LiveView in action.
 
 
+## Sewing tags into all of this
+
+
 ## Filtered By Tag Publishing/Topic
+You might be saying, "we dont have tags yet", but we are going to after we make this channel.
 ## Chrome Extension
 We're going to handwave most of this away, because its not the point of the guide.
 
