@@ -1,3 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nasty Clone - README Comparison</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #ff00ff;
+            color: #00ffff;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(45deg, #ff00ff, #00ffff);
+        }
+        .header {
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #fff;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        h2 {
+            color: #1a1a1a;
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-shadow:
+                2px 2px 0 rgba(255, 0, 255, 0.4),
+                -2px -2px 0 rgba(155, 161, 234, 0.4);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            display: inline-block;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1a1a1a;
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-shadow:
+                2px 2px 0 rgba(255, 0, 255, 0.4),
+                -2px -2px 0 rgba(155, 161, 234, 0.4);
+            background: linear-gradient(45deg,
+                rgba(255, 255, 255, 0.95),
+                rgba(255, 255, 255, 0.98)
+            );
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            display: inline-block;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        }
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .pane {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            border-right: 2px solid rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+        }
+        .pane:last-child {
+            border-right: none;
+        }
+        pre {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1.5rem;
+            border-radius: 10px;
+            border: 2px solid #fff;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5),
+                        0 0 40px rgba(0, 255, 255, 0.5);
+            color: #000;
+            line-height: 1.5;
+            position: relative;
+            animation: glow 2s infinite alternate;
+        }
+        pre::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+        }
+        pre::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #00ffff, #ff00ff, #00ffff);
+        }
+        .pane-title {
+            position: sticky;
+            top: 0;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 1rem 0;
+            margin-top: -2rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #fff;
+            backdrop-filter: blur(5px);
+        }
+        @keyframes glow {
+            from {
+                box-shadow: 0 0 20px rgba(255, 0, 255, 0.5),
+                           0 0 40px rgba(0, 255, 255, 0.5);
+            }
+            to {
+                box-shadow: 0 0 30px rgba(255, 0, 255, 0.8),
+                           0 0 60px rgba(0, 255, 255, 0.8);
+            }
+        }
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .pane {
+                border-right: none;
+                border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Two Ways to Do It</h1>
+    </div>
+    <div class="container">
+        <div class="pane">
+            <div class="pane-title">
+                <h2>NASTY_TUT.md</h2>
+            </div>
+            <pre>
 <h1
 id="building-a-little-bookmarking-thing-in-elixirphoenixliveview-1.0">Building
 a little bookmarking thing in Elixir/Phoenix/LiveView (1.0)</h1>
@@ -14,7 +159,7 @@ premises step by step.</p>
 <h2 id="goals">Goals</h2>
 <p>This guide explores building a feature-rich bookmarking application
 that showcases many of the powerful capabilities of Elixir, Phoenix, and
-LiveView. We’ll create a system that publishes real-time events for
+LiveView. We'll create a system that publishes real-time events for
 bookmark creation and discussions, leveraging process-based messaging
 between domain models and event-driven architecture. The application
 will demonstrate how to build reactive web UIs, implement efficient
@@ -23,11 +168,11 @@ websockets.</p>
 <p>I really wanted to build something that could be a talking point that
 shows off all my favorite touchpoints of modern Elixir/Phoenix
 development.</p>
-<p>This guide doesn’t even get into the great new stuff with the type
+<p>This guide doesn't even get into the great new stuff with the type
 system, but it goes a long way towards showing how all the pieces fit
 together.</p>
-<p>Along the way, we’ll explore how the BEAM VM enables us to create
-robust, concurrent systems. We’ll build a traffic simulator to test our
+<p>Along the way, we'll explore how the BEAM VM enables us to create
+robust, concurrent systems. We'll build a traffic simulator to test our
 application at scale, implement channel-based event publishing, and see
 how Phoenix and LiveView make traditionally complex features
 surprisingly straightforward to implement. The end result will be a
@@ -35,7 +180,7 @@ fully functional bookmarking system that handles real-time updates,
 filtered feeds, and cached responses - all with clean, maintainable
 code.</p>
 <p>This is meant to be an approachable guide for developers looking to
-understand how these pieces fit together in practice. We’ll start from a
+understand how these pieces fit together in practice. We'll start from a
 fresh Phoenix application and incrementally add features, explaining the
 concepts and patterns as we go. The focus is on showing how Elixir and
 Phoenix can elegantly handle complex requirements while keeping the
@@ -46,7 +191,7 @@ will go so far as to provide a commit for each major step of the way
 along the project so even if you are a little unclear, you can follow
 along</h3>
 <h2 id="project-overview">Project Overview</h2>
-<p>Let’s break down how we’ll implement the features mentioned above.
+<p>Let's break down how we'll implement the features mentioned above.
 While this guide provides a high-level overview, the accompanying repo
 serves as a reference implementation that may differ slightly in
 details.</p>
@@ -69,8 +214,8 @@ can be accomplished with <code>mix phx.new nasty --live</code> to ensure
 we have all the nice toys. Note: Modules here dont list a filepath but
 assume you will name them matching their path-ish. You can save files
 wherever, but make sure to keep the module names matching here if you
-are newer to Elixir. The path doesn’t matter so long as its compiled in
-most cases, just the module. We’re going to start by building up a
+are newer to Elixir. The path doesn't matter so long as its compiled in
+most cases, just the module. We're going to start by building up a
 relational schema from the ground up. We ultimately will be serving it
 mostly via a cache…but for now this works well. This can be done with a
 pretty simple setup.</p>
@@ -82,7 +227,7 @@ id="every-step-in-this-has-a-commit-we-can-checkout-of-the-sibling-repo-they-wil
 Step in this has a commit we can checkout of the <a
 href="https://github.com/robertgrayson/nasty_clone">sibling repo</a>,
 they will be highlighted in each section and you can clone that repo and
-check out each commit if you are following along and can’t get something
+check out each commit if you are following along and can't get something
 to compile</h3>
 <p>We can map these out pretty quickly.</p>
 <h3 id="a-basic-data-model-and-layer">A Basic Data Model and Layer</h3>
@@ -281,7 +426,7 @@ class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb7-1"><a hr
 working (they do).</p>
 <p>Next, we want to start thinking about the higher order usage of our
 system.</p>
-<p>This isn’t just a bookmarking tool, we want people to build on top of
+<p>This isn't just a bookmarking tool, we want people to build on top of
 the feeds of bookmarks coming in as things develop.</p>
 <p>In order to work towards a pubsub system, first we will need an
 in-memory store representing all of this so that we can track these
@@ -290,7 +435,7 @@ records dynamically.</p>
 shine here.</p>
 <p>We can have the ETS process listen to pubsub messages, and write
 accordingly.</p>
-<p>Let’s take a look at our highest level layer: <code>Cache</code>.</p>
+<p>Let's take a look at our highest level layer: <code>Cache</code>.</p>
 <div class="sourceCode" id="cb8"><pre
 class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span> <span class="kw">do</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">GenServer</span></span>
@@ -342,7 +487,7 @@ class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb9-1"><a hr
 see that we have a table with all of our bookmarks.</p>
 <p>This enforces no typing contract of what an entry in here looks like,
 and we have one of those though.</p>
-<p>Let’s instead wire things up to use <code>Bookmark</code> structs
+<p>Let's instead wire things up to use <code>Bookmark</code> structs
 that are representing the Ecto table.</p>
 <p>Since this is all native Elixir, we can just have the Ecto struct can
 just be the one that the cache uses too.</p>
@@ -401,10 +546,10 @@ class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb11-1"><a h
 <span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a><span class="ot">]</span></span></code></pre></div>
 <h4 id="commit-818e3d65422581e03538544d905b292e2960aefa">Commit
 818e3d65422581e03538544d905b292e2960aefa</h4>
-<p>For now, let’s create a common interface for the cache and also back
+<p>For now, let's create a common interface for the cache and also back
 this into Postgres.</p>
-<p>We can do this pretty simply by creating a ‘Bookmarks’ context
-module. This module will be how we access ‘state’ in bookmarks as a
+<p>We can do this pretty simply by creating a 'Bookmarks' context
+module. This module will be how we access 'state' in bookmarks as a
 whole. Since we have both postgres and the cache now, we want to have a
 single interface to set these values.</p>
 <p>We will start with the <code>Bookmarks</code> context module.</p>
@@ -431,7 +576,7 @@ class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb12-1"><a h
 <span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
 <span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
 <p>This does two things: create a bookmark, and then persist it to the
-cache as well. It still returns the bookmark, for simplicity’s sake.</p>
+cache as well. It still returns the bookmark, for simplicity's sake.</p>
 <p>Now, we will make some changes in the cache to handle this. We are
 really just updating our handle_cast to accept the bookmark struct and
 then pass it to the cache.</p>
@@ -511,7 +656,7 @@ class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb16-1"><a h
 <span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
 <span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
 <h3 id="writingtodo-elaborate-here">WRITINGTODO elaborate here</h3>
-<p>This is pretty straightforward thanks to Phoenix’s PubSub. We are
+<p>This is pretty straightforward thanks to Phoenix's PubSub. We are
 simply handling a basic join when someone comes for the firehose, and
 then if a bookmark is created pushing it to the client over the
 socket.</p>
@@ -648,7 +793,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href=
 <span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="st">      &quot;tags&quot;: [&quot;example&quot;, &quot;test&quot;]</span></span>
 <span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="st">    }</span></span>
 <span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span></code></pre></div>
-<p>Next, we kind of hand wave away building a Chrome extension. It’s
+<p>Next, we kind of hand wave away building a Chrome extension. It's
 super simple and you can skip it and just follow the advice in line 2 of
 the section.</p>
 <h2 id="traffic">Traffic</h2>
@@ -779,13 +924,13 @@ promise.</em></p>
 <h4 id="commit-abcd">Commit ABCD</h4>
 <h2 id="a-liveview-showing-the-link-feed">A LiveView Showing the Link
 Feed</h2>
-<p>Finally, let’s view all these links that are coming across the wire.
+<p>Finally, let's view all these links that are coming across the wire.
 This is where we get to see LiveView in action.</p>
 <h2 id="sewing-tags-into-all-of-this">Sewing tags into all of this</h2>
 <h2 id="filtered-by-tag-publishingtopic">Filtered By Tag
 Publishing/Topic</h2>
-<p>You might be saying, “we dont have tags yet”, but we are going to
-after we make this channel. ## Chrome Extension We’re going to handwave
+<p>You might be saying, "we dont have tags yet" but we are going to
+after we make this channel. ## Chrome Extension We're going to handwave
 most of this away, because its not the point of the guide.</p>
 <p>In short, here is a <a
 href="https://github.com/robertgrayson/nasty_chrome_extension">chrome
@@ -867,3 +1012,40 @@ class="sourceCode javascript"><code class="sourceCode javascript"><span id="cb26
 <span id="cb26-57"><a href="#cb26-57" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb26-58"><a href="#cb26-58" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
 <h2 id="final-features-reflections">Final Features, Reflections</h2>
+
+            </pre>
+        </div>
+        <div class="pane">
+            <div class="pane-title">
+                <h2>README2.md</h2>
+            </div>
+            <pre>
+# Nasty Clone - A Modern Bookmarking System
+
+## Overview
+This project demonstrates building a real-time bookmarking system using:
+- Phoenix LiveView for reactive UI
+- PubSub for event broadcasting
+- ETS for high-performance caching
+- PostgreSQL for persistence
+- WebSocket channels for real-time updates
+
+## Features
+- Real-time bookmark feed
+- Tag-based filtering
+- Chat system for bookmark discussions
+- Chrome extension for easy bookmarking
+- Traffic simulation for testing
+- Randomized discovery page
+
+## Architecture
+The system uses an event-driven architecture where:
+1. Bookmarks are created through web UI or extension
+2. Events are broadcast through PubSub
+3. Cache is updated in real-time
+4. LiveView components react to changes
+5. Clients receive updates via WebSocket</pre>
+        </div>
+    </div>
+</body>
+</html>
