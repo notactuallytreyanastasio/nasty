@@ -1,29 +1,869 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nasty Clone</title>
-    <style>
-        body {
-            font-family: monospace;
-            background: black;
-            color: #00ffff;
-            padding: 2rem;
-            line-height: 1.6;
-        }
-        a {
-            color: #ff00ff;
-            text-decoration: none;
-        }
-        a:hover {
-            color: #00ffff;
-        }
-    </style>
-</head>
-<body>
-    <h1>Nasty Clone</h1>
-    <p>A bookmarking system built with Elixir/Phoenix/LiveView</p>
-    <p><a href="https://github.com/your-username/nasty_clone">View on GitHub</a></p>
-</body>
-</html>
+<h1
+id="building-a-little-bookmarking-thing-in-elixirphoenixliveview-1.0">Building
+a little bookmarking thing in Elixir/Phoenix/LiveView (1.0)</h1>
+<h2 id="initial-thoughts">Initial Thoughts</h2>
+<p>At first, I built this on a Saturday. I started the project at around
+1pm and made the last major commits by about midnight.</p>
+<p>I was able to move this fast because I used an LLM to assist me.</p>
+<p>To reflect on the other topic I want to write about, using LLMs to
+build software today, and learning the tools, I decided to prove I knew
+how to build this by taking the finished product and breaking it down
+into bite size pieces that can become a tutorial that builds up the
+premises step by step.</p>
+<p>So, from there, here we go</p>
+<h2 id="goals">Goals</h2>
+<p>This guide explores building a feature-rich bookmarking application
+that showcases many of the powerful capabilities of Elixir, Phoenix, and
+LiveView. We’ll create a system that publishes real-time events for
+bookmark creation and discussions, leveraging process-based messaging
+between domain models and event-driven architecture. The application
+will demonstrate how to build reactive web UIs, implement efficient
+caching layers, and handle complex pub/sub patterns through
+websockets.</p>
+<p>I really wanted to build something that could be a talking point that
+shows off all my favorite touchpoints of modern Elixir/Phoenix
+development.</p>
+<p>This guide doesn’t even get into the great new stuff with the type
+system, but it goes a long way towards showing how all the pieces fit
+together.</p>
+<p>Along the way, we’ll explore how the BEAM VM enables us to create
+robust, concurrent systems. We’ll build a traffic simulator to test our
+application at scale, implement channel-based event publishing, and see
+how Phoenix and LiveView make traditionally complex features
+surprisingly straightforward to implement. The end result will be a
+fully functional bookmarking system that handles real-time updates,
+filtered feeds, and cached responses - all with clean, maintainable
+code.</p>
+<p>This is meant to be an approachable guide for developers looking to
+understand how these pieces fit together in practice. We’ll start from a
+fresh Phoenix application and incrementally add features, explaining the
+concepts and patterns as we go. The focus is on showing how Elixir and
+Phoenix can elegantly handle complex requirements while keeping the
+codebase simple and understandable.</p>
+<h3
+id="we-will-go-so-far-as-to-provide-a-commit-for-each-major-step-of-the-way-along-the-project-so-even-if-you-are-a-little-unclear-you-can-follow-along">We
+will go so far as to provide a commit for each major step of the way
+along the project so even if you are a little unclear, you can follow
+along</h3>
+<h2 id="project-overview">Project Overview</h2>
+<p>Let’s break down how we’ll implement the features mentioned above.
+While this guide provides a high-level overview, the accompanying repo
+serves as a reference implementation that may differ slightly in
+details.</p>
+<p>Key Features: - Real-time bookmark and chat streams - Tag-based feed
+filtering - Live firehose view of all bookmarks - Randomized bookmark
+discovery page</p>
+<p>Implementation Path: - User authentication (simplified for this
+guide) - Core bookmark and tag models - In-memory caching layer - PubSub
+event system - Traffic simulation for testing - LiveView UI components -
+PostgreSQL persistence - Event broadcasting system - Global firehose
+events - Tag-filtered events</p>
+<p>While this guide focuses on building a bookmarking system, the
+patterns and approaches demonstrated here can be applied to many other
+real-time, event-driven applications. The concepts of caching, pub/sub
+messaging, and LiveView UIs are foundational for modern Phoenix
+applications.</p>
+<h2 id="getting-started">Getting Started</h2>
+<p>We want to start off with a basic new Phoenix LiveView project. This
+can be accomplished with <code>mix phx.new nasty --live</code> to ensure
+we have all the nice toys. Note: Modules here dont list a filepath but
+assume you will name them matching their path-ish. You can save files
+wherever, but make sure to keep the module names matching here if you
+are newer to Elixir. The path doesn’t matter so long as its compiled in
+most cases, just the module. We’re going to start by building up a
+relational schema from the ground up. We ultimately will be serving it
+mostly via a cache…but for now this works well. This can be done with a
+pretty simple setup.</p>
+<p>Users have bookmarks. Bookmarks have a title, description, url,
+public/not public bool, tags, and a user. Tags are a many to many
+relationship on tags lumping them into categories.</p>
+<h3
+id="every-step-in-this-has-a-commit-we-can-checkout-of-the-sibling-repo-they-will-be-highlighted-in-each-section-and-you-can-clone-that-repo-and-check-out-each-commit-if-you-are-following-along-and-cant-get-something-to-compile">Every
+Step in this has a commit we can checkout of the <a
+href="https://github.com/robertgrayson/nasty_clone">sibling repo</a>,
+they will be highlighted in each section and you can clone that repo and
+check out each commit if you are following along and can’t get something
+to compile</h3>
+<p>We can map these out pretty quickly.</p>
+<h3 id="a-basic-data-model-and-layer">A Basic Data Model and Layer</h3>
+<p>For the unfamiliar, in Elixir, and generally in Phoenix, we use a
+library called Ecto to interact with our database. It may not feel quite
+like an ORM when you see it in use. Because, well, its not. Its a system
+to follow the repository pattern in order to allow us to interact with
+our database in a way that is both safe and easy to understand.</p>
+<p>So, to start off, we will define a <code>Schema</code> for each of
+the database tables we want.</p>
+<p>In this case, that will be creating bookmarks, tags, and
+bookmark_tags as a join table.</p>
+<p>The <code>schema</code> macro defines the general shape, and
+<code>changeset</code> is a function that allows us to define the shape
+of the data we want to insert into the database.</p>
+<p>Our migrations are generated with
+<code>mix ect.gen.migration your_migration_name</code> and you can put
+the contents we share below right in there.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span> <span class="kw">do</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Schema</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="im">import</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Changeset</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  schema <span class="st">&quot;bookmarks&quot;</span> <span class="kw">do</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    field <span class="va">:title</span>, <span class="va">:string</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    field <span class="va">:description</span>, <span class="va">:string</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    field <span class="va">:url</span>, <span class="va">:string</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    field <span class="va">:public</span>, <span class="va">:boolean</span>, <span class="va">default:</span> <span class="cn">true</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    belongs_to <span class="va">:user</span>, <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Accounts</span><span class="op">.</span><span class="cn">User</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    many_to_many <span class="va">:tags</span>, <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Tag</span>, <span class="va">join_through:</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">BookmarkTag</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    timestamps<span class="fu">()</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@doc</span> <span class="cn">false</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> changeset<span class="fu">(</span>bookmark, attrs<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    bookmark</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> cast<span class="fu">(</span>attrs, <span class="ot">[</span><span class="va">:title</span>, <span class="va">:description</span>, <span class="va">:url</span>, <span class="va">:public</span>, <span class="va">:user_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> validate_required<span class="fu">(</span><span class="ot">[</span><span class="va">:title</span>, <span class="va">:url</span>, <span class="va">:user_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> validate_url<span class="fu">(</span><span class="va">:url</span><span class="fu">)</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> assoc_constraint<span class="fu">(</span><span class="va">:user</span><span class="fu">)</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> new_changeset <span class="kw">do</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    %<span class="cn">__MODULE__</span><span class="fu">{</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>      <span class="va">public:</span> <span class="cn">true</span>,</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>      <span class="va">tags:</span> <span class="ot">[]</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> changeset<span class="fu">(</span>%<span class="fu">{})</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>  <span class="kw">defp</span> validate_url<span class="fu">(</span>changeset, field<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    validate_change<span class="fu">(</span>changeset, field, <span class="kw">fn</span> _, url <span class="op">-&gt;</span></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>      <span class="kw">case</span> <span class="cn">URI</span><span class="op">.</span>parse<span class="fu">(</span>url<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>        %<span class="cn">URI</span><span class="fu">{</span><span class="va">scheme:</span> scheme, <span class="va">host:</span> host<span class="fu">}</span> <span class="kw">when</span> <span class="kw">not</span> is_nil<span class="fu">(</span>scheme<span class="fu">)</span> <span class="kw">and</span> <span class="kw">not</span> is_nil<span class="fu">(</span>host<span class="fu">)</span> <span class="op">-&gt;</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>          <span class="ot">[]</span></span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>        _ <span class="op">-&gt;</span></span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>          <span class="ot">[</span><span class="fu">{</span>field, <span class="st">&quot;must be a valid URL&quot;</span><span class="fu">}</span><span class="ot">]</span></span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>      <span class="kw">end</span></span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="fu">)</span></span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Simple enough. This is just represents everything in standard ecto
+and leverages some URI parsing to check URLs. Nex we represent a
+bookmark tag.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">BookmarkTag</span> <span class="kw">do</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Schema</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="im">import</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Changeset</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  schema <span class="st">&quot;bookmark_tags&quot;</span> <span class="kw">do</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    belongs_to <span class="va">:bookmark</span>, <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    belongs_to <span class="va">:tag</span>, <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Tag</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    timestamps<span class="fu">()</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@doc</span> <span class="cn">false</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> changeset<span class="fu">(</span>bookmark_tag, attrs<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    bookmark_tag</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> cast<span class="fu">(</span>attrs, <span class="ot">[</span><span class="va">:bookmark_id</span>, <span class="va">:tag_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> validate_required<span class="fu">(</span><span class="ot">[</span><span class="va">:bookmark_id</span>, <span class="va">:tag_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> unique_constraint<span class="fu">(</span><span class="ot">[</span><span class="va">:bookmark_id</span>, <span class="va">:tag_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> assoc_constraint<span class="fu">(</span><span class="va">:bookmark</span><span class="fu">)</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> assoc_constraint<span class="fu">(</span><span class="va">:tag</span><span class="fu">)</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Same story.</p>
+<p>And finally the tag.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Tag</span> <span class="kw">do</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Schema</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="im">import</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Changeset</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  schema <span class="st">&quot;tags&quot;</span> <span class="kw">do</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    field <span class="va">:name</span>, <span class="va">:string</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    many_to_many <span class="va">:bookmarks</span>, <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span>, <span class="va">join_through:</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">BookmarkTag</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    timestamps<span class="fu">()</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@doc</span> <span class="cn">false</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> changeset<span class="fu">(</span>tag, attrs<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    tag</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> cast<span class="fu">(</span>attrs, <span class="ot">[</span><span class="va">:name</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> validate_required<span class="fu">(</span><span class="ot">[</span><span class="va">:name</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> unique_constraint<span class="fu">(</span><span class="va">:name</span><span class="fu">)</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> update_change<span class="fu">(</span><span class="va">:name</span>, <span class="op">&amp;</span><span class="cn">String</span><span class="op">.</span>downcase<span class="op">/</span><span class="dv">1</span><span class="fu">)</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Now we can add some migrations to create all of this.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Repo</span><span class="op">.</span><span class="cn">Migrations</span><span class="op">.</span><span class="cn">CreateBookmarks</span> <span class="kw">do</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Migration</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> change <span class="kw">do</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    create table<span class="fu">(</span><span class="va">:bookmarks</span><span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>      add <span class="va">:title</span>, <span class="va">:string</span>, <span class="va">null:</span> <span class="cn">false</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>      add <span class="va">:description</span>, <span class="va">:text</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>      add <span class="va">:url</span>, <span class="va">:string</span>, <span class="va">null:</span> <span class="cn">false</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>      add <span class="va">:public</span>, <span class="va">:boolean</span>, <span class="va">default:</span> <span class="cn">true</span>, <span class="va">null:</span> <span class="cn">false</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>      add <span class="va">:user_id</span>, references<span class="fu">(</span><span class="va">:users</span>, <span class="va">on_delete:</span> <span class="va">:delete_all</span><span class="fu">)</span>, <span class="va">null:</span> <span class="cn">false</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>      timestamps<span class="fu">()</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    create index<span class="fu">(</span><span class="va">:bookmarks</span>, <span class="ot">[</span><span class="va">:user_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    create index<span class="fu">(</span><span class="va">:bookmarks</span>, <span class="ot">[</span><span class="va">:public</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>And tags.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Repo</span><span class="op">.</span><span class="cn">Migrations</span><span class="op">.</span><span class="cn">CreateTags</span> <span class="kw">do</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Migration</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> change <span class="kw">do</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    create table<span class="fu">(</span><span class="va">:tags</span><span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>      add <span class="va">:name</span>, <span class="va">:string</span>, <span class="va">null:</span> <span class="cn">false</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>      timestamps<span class="fu">()</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    create unique_index<span class="fu">(</span><span class="va">:tags</span>, <span class="ot">[</span><span class="va">:name</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>And our join table.</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Repo</span><span class="op">.</span><span class="cn">Migrations</span><span class="op">.</span><span class="cn">CreateBookmarkTags</span> <span class="kw">do</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Migration</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> change <span class="kw">do</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    create table<span class="fu">(</span><span class="va">:bookmark_tags</span><span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>      add <span class="va">:bookmark_id</span>, references<span class="fu">(</span><span class="va">:bookmarks</span>, <span class="va">on_delete:</span> <span class="va">:delete_all</span><span class="fu">)</span>, <span class="va">null:</span> <span class="cn">false</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>      add <span class="va">:tag_id</span>, references<span class="fu">(</span><span class="va">:tags</span>, <span class="va">on_delete:</span> <span class="va">:delete_all</span><span class="fu">)</span>, <span class="va">null:</span> <span class="cn">false</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>      timestamps<span class="fu">()</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    create index<span class="fu">(</span><span class="va">:bookmark_tags</span>, <span class="ot">[</span><span class="va">:bookmark_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    create index<span class="fu">(</span><span class="va">:bookmark_tags</span>, <span class="ot">[</span><span class="va">:tag_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    create unique_index<span class="fu">(</span><span class="va">:bookmark_tags</span>, <span class="ot">[</span><span class="va">:bookmark_id</span>, <span class="va">:tag_id</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Give it a
+<code>mix do deps.get, compile, ecto.create, ecto.migrate, phx.server</code>
+and lets see if we can create anything.</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>$ mix <span class="kw">do</span> deps<span class="op">.</span>get, compile, ecto<span class="op">.</span>create, ecto<span class="op">.</span>migrate</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>$ iex <span class="op">-</span>S mix phx<span class="op">.</span>server</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="im">alias</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="im">alias</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Repo</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> bm <span class="op">=</span> %<span class="cn">Bookmark</span><span class="fu">{</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="va">title:</span> <span class="st">&quot;My stuff&quot;</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="va">url:</span> <span class="st">&quot;https://google.com&quot;</span>,</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="va">description:</span> <span class="st">&quot;winning&quot;</span>,</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="va">tags:</span> <span class="ot">[]</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span> <span class="op">|&gt;</span> <span class="cn">Repo</span><span class="op">.</span>insert</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="va">:ok</span>,</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a> %<span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span><span class="fu">{</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>   <span class="va">__meta__:</span> <span class="co">#Ecto.Schema.Metadata&lt;:loaded, &quot;bookmarks&quot;&gt;,</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>   <span class="va">id:</span> <span class="dv">2886</span>,</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>   <span class="va">title:</span> <span class="st">&quot;My stuff&quot;</span>,</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>   <span class="va">description:</span> <span class="st">&quot;winning&quot;</span>,</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>   <span class="va">url:</span> <span class="st">&quot;https://google.com&quot;</span>,</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>   <span class="va">public:</span> <span class="cn">true</span>,</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>   <span class="va">tags:</span> <span class="ot">[]</span>,</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>   <span class="va">inserted_at:</span> <span class="op">~</span>N<span class="ot">[</span><span class="dv">2025</span><span class="bn">-01</span><span class="dv">-20</span> <span class="bn">05</span>:<span class="dv">49</span>:<span class="dv">37</span><span class="ot">]</span>,</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>   <span class="va">updated_at:</span> <span class="op">~</span>N<span class="ot">[</span><span class="dv">2025</span><span class="bn">-01</span><span class="dv">-20</span> <span class="bn">05</span>:<span class="dv">49</span>:<span class="dv">37</span><span class="ot">]</span></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a> <span class="fu">}}</span></span></code></pre></div>
+<h4 id="commit-53aca37178085861a4523d2b9c214b861dee843d">Commit
+53aca37178085861a4523d2b9c214b861dee843d</h4>
+<p>Great, so we can insert bookmarks, and lets just assume we have tags
+working (they do).</p>
+<p>Next, we want to start thinking about the higher order usage of our
+system.</p>
+<p>This isn’t just a bookmarking tool, we want people to build on top of
+the feeds of bookmarks coming in as things develop.</p>
+<p>In order to work towards a pubsub system, first we will need an
+in-memory store representing all of this so that we can track these
+records dynamically.</p>
+<p>These cache setups in ETS are very easy in Elixir/Erlang, and really
+shine here.</p>
+<p>We can have the ETS process listen to pubsub messages, and write
+accordingly.</p>
+<p>Let’s take a look at our highest level layer: <code>Cache</code>.</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span> <span class="kw">do</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">GenServer</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="im">require</span> <span class="cn">Logger</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@table_name</span> <span class="va">:bookmarks_cache</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> start_link<span class="fu">(</span>_<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="cn">GenServer</span><span class="op">.</span>start_link<span class="fu">(</span><span class="cn">__MODULE__</span>, <span class="ot">[]</span>, <span class="va">name:</span> <span class="cn">__MODULE__</span><span class="fu">)</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> init<span class="fu">(</span>_<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    table <span class="op">=</span> <span class="va">:ets</span><span class="op">.</span>new<span class="fu">(</span><span class="ot">@table_name</span>, <span class="ot">[</span><span class="va">:set</span>, <span class="va">:protected</span>, <span class="va">:named_table</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:ok</span>, %<span class="fu">{</span><span class="va">table:</span> table<span class="fu">}</span>, <span class="fu">{</span><span class="va">:continue</span>, <span class="va">:load_bookmarks</span><span class="fu">}}</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_cast<span class="fu">({</span><span class="va">:create_bookmark</span>, attrs, tags<span class="fu">}</span>, state<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># </span><span class="al">TODO</span><span class="co"> handle tags</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>    <span class="cn">GenServer</span><span class="op">.</span>cast<span class="fu">(</span><span class="cn">__MODULE__</span>, <span class="fu">{</span><span class="va">:update_bookmark</span>, attrs<span class="fu">})</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, state<span class="fu">}</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Server callbacks</span></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_cast<span class="fu">({</span><span class="va">:update_bookmark</span>, bookmark<span class="fu">}</span>, state<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>    <span class="ot">[</span><span class="fu">{</span><span class="va">:all_bookmarks</span>, bookmarks<span class="fu">}</span><span class="ot">]</span> <span class="op">=</span> <span class="va">:ets</span><span class="op">.</span>lookup<span class="fu">(</span><span class="ot">@table_name</span>, <span class="va">:all_bookmarks</span><span class="fu">)</span></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>    <span class="va">:ets</span><span class="op">.</span>insert<span class="fu">(</span><span class="ot">@table_name</span>, <span class="fu">{</span><span class="va">:all_bookmarks</span>, bookmarks <span class="op">++</span> <span class="ot">[</span>bookmark<span class="ot">]</span><span class="fu">})</span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, state<span class="fu">}</span></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_continue<span class="fu">(</span><span class="va">:load_bookmarks</span>, state<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>    <span class="va">:ets</span><span class="op">.</span>insert<span class="fu">(</span><span class="ot">@table_name</span>, <span class="fu">{</span><span class="va">:all_bookmarks</span>, <span class="ot">[]</span><span class="fu">})</span></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, state<span class="fu">}</span></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>We can start by playing in IEx with this interface</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="im">alias</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="im">alias</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Repo</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="cn">GenServer</span><span class="op">.</span>cast<span class="fu">(</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span>,</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">{</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">:create_bookmark</span>,</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    %<span class="fu">{</span><span class="va">url:</span> <span class="st">&quot;https://foo.com&quot;</span>, <span class="va">title:</span> <span class="st">&quot;bar&quot;</span>, <span class="va">description:</span> <span class="st">&quot;baz&quot;</span>, <span class="va">public:</span> <span class="cn">true</span><span class="fu">}</span>,</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="ot">[]</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="fu">)</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="va">:ok</span></span></code></pre></div>
+<p>Now, if we go in and look at things with <code>:ets.all</code> we can
+see that we have a table with all of our bookmarks.</p>
+<p>This enforces no typing contract of what an entry in here looks like,
+and we have one of those though.</p>
+<p>Let’s instead wire things up to use <code>Bookmark</code> structs
+that are representing the Ecto table.</p>
+<p>Since this is all native Elixir, we can just have the Ecto struct can
+just be the one that the cache uses too.</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>  <span class="co">## cache.ex</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span> <span class="kw">do</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">Nasty</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># --- snip ---</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_cast<span class="fu">({</span><span class="va">:create_bookmark</span>, attrs <span class="op">=</span> %<span class="fu">{</span><span class="va">title:</span> title, <span class="va">description:</span> description, <span class="va">url:</span> url, <span class="va">public:</span> public<span class="fu">}</span>, tags<span class="fu">}</span>, state<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    bookmark <span class="op">=</span> %<span class="cn">Bookmark</span><span class="fu">{</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>      <span class="va">title:</span> title,</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>      <span class="va">description:</span> description,</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>      <span class="va">url:</span> url,</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>      <span class="va">public:</span> public,</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>      <span class="co"># </span><span class="al">TODO</span><span class="co"> tags</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>      <span class="co"># tags: tags</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>    <span class="cn">GenServer</span><span class="op">.</span>cast<span class="fu">(</span><span class="cn">__MODULE__</span>, <span class="fu">{</span><span class="va">:update_bookmark</span>, bookmark<span class="fu">})</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, state<span class="fu">}</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_cast<span class="fu">({</span><span class="va">:create_bookmark</span>, attrs, tags<span class="fu">}</span>, state<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    <span class="cn">Logger</span><span class="op">.</span>error<span class="fu">(</span><span class="st">&quot;Invalid props given to :create_bookmark. provide title, description, url, and public&quot;</span><span class="fu">)</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, state<span class="fu">}</span></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>  <span class="co"># --- snip ---</span></span></code></pre></div>
+<p>Now, we are at least passing around <code>Bookmark</code> structs. We
+are still hand waving away tags, but we can come back to that. We at
+least are enforcing the shape of the data that we are passing
+around.</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="im">alias</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="cn">Cache</span><span class="op">.</span>start_link<span class="fu">(</span><span class="cn">nil</span><span class="fu">)</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="va">:ok</span>, <span class="co">#PID&lt;0.358.0&gt;}</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="cn">GenServer</span><span class="op">.</span>cast<span class="fu">(</span><span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span>, <span class="fu">{</span><span class="va">:create_bookmark</span>, %<span class="fu">{</span><span class="va">url:</span> <span class="st">&quot;https://bizzle.com&quot;</span>, <span class="va">title:</span> <span class="st">&quot;baz&quot;</span>, <span class="va">description:</span> <span class="st">&quot;bizz&quot;</span>, <span class="va">public:</span> <span class="cn">true</span><span class="fu">}</span>, <span class="ot">[]</span><span class="fu">})</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="va">:ok</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>iex<span class="op">&gt;</span> <span class="va">:ets</span><span class="op">.</span>tab2list<span class="fu">(</span><span class="va">:bookmarks_cache</span><span class="fu">)</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="ot">[</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="va">all_bookmarks:</span> <span class="ot">[</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    %<span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span><span class="fu">{</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>      <span class="va">__meta__:</span> <span class="co">#Ecto.Schema.Metadata&lt;:built, &quot;bookmarks&quot;&gt;,</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>      <span class="va">id:</span> <span class="cn">nil</span>,</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>      <span class="va">title:</span> <span class="st">&quot;baz&quot;</span>,</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>      <span class="va">description:</span> <span class="st">&quot;bizz&quot;</span>,</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>      <span class="va">url:</span> <span class="st">&quot;https://bizzle.com&quot;</span>,</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>      <span class="va">public:</span> <span class="cn">true</span>,</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>      <span class="va">user_id:</span> <span class="cn">nil</span>,</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>      <span class="va">user:</span> <span class="co">#Ecto.Association.NotLoaded&lt;association :user is not loaded&gt;,</span></span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>      <span class="va">tags:</span> <span class="co">#Ecto.Association.NotLoaded&lt;association :tags is not loaded&gt;,</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>      <span class="va">inserted_at:</span> <span class="cn">nil</span>,</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>      <span class="va">updated_at:</span> <span class="cn">nil</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>  <span class="ot">]</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a><span class="ot">]</span></span></code></pre></div>
+<h4 id="commit-818e3d65422581e03538544d905b292e2960aefa">Commit
+818e3d65422581e03538544d905b292e2960aefa</h4>
+<p>For now, let’s create a common interface for the cache and also back
+this into Postgres.</p>
+<p>We can do this pretty simply by creating a ‘Bookmarks’ context
+module. This module will be how we access ‘state’ in bookmarks as a
+whole. Since we have both postgres and the cache now, we want to have a
+single interface to set these values.</p>
+<p>We will start with the <code>Bookmarks</code> context module.</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span> <span class="kw">do</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">import</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Query</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Repo</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">Tag</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">Cache</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> get<span class="fu">(</span>id<span class="fu">)</span>, <span class="va">do:</span> <span class="cn">Repo</span><span class="op">.</span>get!<span class="fu">(</span><span class="cn">Bookmark</span>, id<span class="fu">)</span> <span class="op">|&gt;</span> <span class="cn">Repo</span><span class="op">.</span>preload<span class="fu">(</span><span class="va">:tags</span><span class="fu">)</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> create<span class="fu">(</span>attrs \\ %<span class="fu">{}</span>, tags<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># </span><span class="al">TODO</span><span class="co"> tags</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    bookmark <span class="op">=</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>      %<span class="cn">Bookmark</span><span class="fu">{}</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>      <span class="op">|&gt;</span> <span class="cn">Bookmark</span><span class="op">.</span>changeset<span class="fu">(</span>attrs<span class="fu">)</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>      <span class="op">|&gt;</span> <span class="cn">Repo</span><span class="op">.</span>insert!<span class="fu">()</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>    <span class="cn">GenServer</span><span class="op">.</span>cast<span class="fu">(</span><span class="cn">Cache</span>, <span class="fu">{</span><span class="va">:create_bookmark</span>, bookmark, tags<span class="fu">})</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    bookmark</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>This does two things: create a bookmark, and then persist it to the
+cache as well. It still returns the bookmark, for simplicity’s sake.</p>
+<p>Now, we will make some changes in the cache to handle this. We are
+really just updating our handle_cast to accept the bookmark struct and
+then pass it to the cache.</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Cache</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># snip</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_cast<span class="fu">(</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>          <span class="va">:create_bookmark</span>,</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>          bookmark <span class="op">=</span> %<span class="cn">Bookmark</span><span class="fu">{</span><span class="va">title:</span> title, <span class="va">description:</span> description, <span class="va">url:</span> url, <span class="va">public:</span> public<span class="fu">}</span>,</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>          tags</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>        <span class="fu">}</span>,</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>        state</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>    <span class="cn">GenServer</span><span class="op">.</span>cast<span class="fu">(</span><span class="cn">__MODULE__</span>, <span class="fu">{</span><span class="va">:update_bookmark</span>, bookmark<span class="fu">})</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, state<span class="fu">}</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>  <span class="co"># snip</span></span></code></pre></div>
+<p>And finally, when we get a create event, we can update the cache as
+well as postgres.</p>
+<p>With all of this wired up, we can really start to get real with
+things if we add PubSub.</p>
+<p>However, first we will make a brief detour and quickly build a chrome
+extension that we can create bookmarks with, and set up an API endpoint
+to service that usecase.</p>
+<h2 id="pubsub">PubSub</h2>
+<p>Now, its time to wire up pubsub. This takes quite a few moving parts,
+but it will all make quite a bit of sense once we start seeing event
+streams. We will start this by connecting to PubSub from the beginning,
+and proceed to broadcast messages to it when we write to the cache &amp;
+postgres.</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Cache</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>   <span class="kw">def</span> init<span class="fu">(</span>_<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>     <span class="co"># our new line</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="op">+</span>    <span class="cn">Phoenix</span><span class="op">.</span><span class="cn">PubSub</span><span class="op">.</span>subscribe<span class="fu">(</span><span class="cn">NastyClone</span><span class="op">.</span><span class="cn">PubSub</span>, <span class="st">&quot;bookmarks&quot;</span><span class="fu">)</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>     table <span class="op">=</span> <span class="va">:ets</span><span class="op">.</span>new<span class="fu">(</span><span class="ot">@table_name</span>, <span class="ot">[</span><span class="va">:set</span>, <span class="va">:protected</span>, <span class="va">:named_table</span><span class="ot">]</span><span class="fu">)</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>     <span class="fu">{</span><span class="va">:ok</span>, %<span class="fu">{</span><span class="va">table:</span> table<span class="fu">}</span>, <span class="fu">{</span><span class="va">:continue</span>, <span class="va">:load_bookmarks</span><span class="fu">}}</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>   <span class="kw">end</span></span></code></pre></div>
+<p>And next, we delete our <code>handle_cast</code> function and instead
+just handle info now.</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Cache</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_info<span class="fu">({</span><span class="va">:bookmark_created</span>, bookmark, tags<span class="fu">}</span>, state<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="cn">Logger</span><span class="op">.</span>info<span class="fu">(</span><span class="st">&quot;Received bookmark created event, updating cache&quot;</span><span class="fu">)</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="ot">[</span><span class="fu">{</span><span class="va">:all_bookmarks</span>, bookmarks<span class="fu">}</span><span class="ot">]</span> <span class="op">=</span> <span class="va">:ets</span><span class="op">.</span>lookup<span class="fu">(</span><span class="ot">@table_name</span>, <span class="va">:all_bookmarks</span><span class="fu">)</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">:ets</span><span class="op">.</span>insert<span class="fu">(</span><span class="ot">@table_name</span>, <span class="fu">{</span><span class="va">:all_bookmarks</span>, bookmarks <span class="op">++</span> <span class="ot">[</span>bookmark<span class="ot">]</span><span class="fu">})</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, state<span class="fu">}</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span></code></pre></div>
+<p>With this, we can implement a channel:</p>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">NastyCloneWeb</span><span class="op">.</span><span class="cn">BookmarkChannel</span> <span class="kw">do</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">NastyCloneWeb</span>, <span class="va">:channel</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@impl</span> <span class="cn">true</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> join<span class="fu">(</span><span class="st">&quot;bookmarks:firehose&quot;</span>, _payload, socket<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    <span class="cn">Phoenix</span><span class="op">.</span><span class="cn">PubSub</span><span class="op">.</span>subscribe<span class="fu">(</span><span class="cn">NastyClone</span><span class="op">.</span><span class="cn">PubSub</span>, <span class="st">&quot;bookmarks&quot;</span><span class="fu">)</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:ok</span>, socket<span class="fu">}</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@impl</span> <span class="cn">true</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_info<span class="fu">({</span><span class="va">:bookmark_created</span>, bookmark, tags<span class="fu">}</span>, socket<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    broadcast_bookmark <span class="op">=</span> %<span class="fu">{</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>      <span class="va">id:</span> bookmark<span class="op">.</span>id,</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>      <span class="va">title:</span> bookmark<span class="op">.</span>title,</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>      <span class="va">description:</span> bookmark<span class="op">.</span>description,</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>      <span class="va">url:</span> bookmark<span class="op">.</span>url,</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>      <span class="va">public:</span> bookmark<span class="op">.</span>public,</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>      <span class="va">tags:</span> tags,</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>      <span class="va">inserted_at:</span> bookmark<span class="op">.</span>inserted_at</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>    push<span class="fu">(</span>socket, <span class="st">&quot;bookmark_created&quot;</span>, broadcast_bookmark<span class="fu">)</span></span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, socket<span class="fu">}</span></span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="writingtodo-elaborate-here">WRITINGTODO elaborate here</h3>
+<p>This is pretty straightforward thanks to Phoenix’s PubSub. We are
+simply handling a basic join when someone comes for the firehose, and
+then if a bookmark is created pushing it to the client over the
+socket.</p>
+<h3 id="writingtodo-use-less-elixiry-language">WRITINGTODO Use less
+elixiry language</h3>
+<p>They key point to take away is how now we dont have to handle the
+cast. We simple created the top level flow of data, and by subscribing,
+we can intercept exactly what we need and do with it as we please. In
+this case, that is handling the creation end to end.</p>
+<h3 id="writingtodo-explain-what-the-user-socket-even-does">WRITINGTODO
+explain what the user socket even does</h3>
+<p>We need to make a generic user socket to start things with.</p>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">NastyCloneWeb</span><span class="op">.</span><span class="cn">UserSocket</span> <span class="kw">do</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">Phoenix</span><span class="op">.</span><span class="cn">Socket</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Channels</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  channel <span class="st">&quot;bookmarks:*&quot;</span>, <span class="cn">NastyCloneWeb</span><span class="op">.</span><span class="cn">BookmarkChannel</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@impl</span> <span class="cn">true</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> connect<span class="fu">(</span>_params, socket, _connect_info<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:ok</span>, socket<span class="fu">}</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@impl</span> <span class="cn">true</span></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> id<span class="fu">(</span>_socket<span class="fu">)</span>, <span class="va">do:</span> <span class="cn">nil</span></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="writingtodo-explain-what-this-means">WRITINGTODO explain what
+this means</h3>
+<p>Now, for this channel to work, we need to add a subscription to the
+socket in our <code>endpoint.ex</code></p>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>  socket <span class="st">&quot;/socket&quot;</span>, <span class="cn">NastyWeb</span><span class="op">.</span><span class="cn">UserSocket</span>,</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">websocket:</span> <span class="cn">true</span>,</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">longpoll:</span> <span class="cn">false</span></span></code></pre></div>
+<h3
+id="writingtodo-go-into-contexts-what-they-are-and-how-this-wraps-things-up-so-nicely-for-so-many-interfaces-web-firehose-client-bookmarklet-internal-pubsub">WRITINGTODO
+Go into contexts, what they are, and how this wraps things up so nicely
+for so many interfaces (web, firehose client, bookmarklet, internal
+pubsub)</h3>
+<p>And finally we make a final entrypoint to interface with Bookmarks
+now.</p>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span> <span class="kw">do</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">import</span> <span class="cn">Ecto</span><span class="op">.</span><span class="cn">Query</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Repo</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Bookmark</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">Tag</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">Cache</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> get<span class="fu">(</span>id<span class="fu">)</span>, <span class="va">do:</span> <span class="cn">Repo</span><span class="op">.</span>get!<span class="fu">(</span><span class="cn">Bookmark</span>, id<span class="fu">)</span> <span class="op">|&gt;</span> <span class="cn">Repo</span><span class="op">.</span>preload<span class="fu">(</span><span class="va">:tags</span><span class="fu">)</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> create<span class="fu">(</span>attrs \\ %<span class="fu">{}</span>, tags<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># </span><span class="al">TODO</span><span class="co"> tags</span></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>    bookmark <span class="op">=</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>      %<span class="cn">Bookmark</span><span class="fu">{}</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>      <span class="op">|&gt;</span> <span class="cn">Bookmark</span><span class="op">.</span>changeset<span class="fu">(</span>attrs<span class="fu">)</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>      <span class="op">|&gt;</span> <span class="cn">Repo</span><span class="op">.</span>insert!<span class="fu">()</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>    <span class="cn">Phoenix</span><span class="op">.</span><span class="cn">PubSub</span><span class="op">.</span>broadcast<span class="fu">(</span><span class="cn">NastyClone</span><span class="op">.</span><span class="cn">PubSub</span>, <span class="st">&quot;bookmarks&quot;</span>, <span class="fu">{</span><span class="va">:bookmark_created</span>, bookmark, tags<span class="fu">})</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>    bookmark</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h4 id="commit-8991bf63b993a1de5f87395c9e0e8330a3c6b53c">Commit
+8991bf63b993a1de5f87395c9e0e8330a3c6b53c</h4>
+<p>With this, lets create a JSON API endpoint to create bookmarks easily
+from our chrome extension.</p>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">NastyCloneWeb</span><span class="op">.</span><span class="cn">Api</span><span class="op">.</span><span class="cn">BookmarkController</span> <span class="kw">do</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">NastyCloneWeb</span>, <span class="va">:controller</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> create<span class="fu">(</span>conn, %<span class="fu">{</span><span class="st">&quot;bookmark&quot;</span> <span class="op">=&gt;</span> bookmark_params<span class="fu">})</span> <span class="kw">do</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Extract tags from params or default to empty list</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>    tags <span class="op">=</span> <span class="cn">Map</span><span class="op">.</span>get<span class="fu">(</span>bookmark_params, <span class="st">&quot;tags&quot;</span>, <span class="ot">[]</span><span class="fu">)</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create the bookmark</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>    bookmark <span class="op">=</span> <span class="cn">Bookmarks</span><span class="op">.</span>create<span class="fu">(</span>bookmark_params, tags<span class="fu">)</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    resp <span class="op">=</span> %<span class="fu">{</span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>      <span class="va">data:</span> %<span class="fu">{</span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>        <span class="va">id:</span> bookmark<span class="op">.</span>id,</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">title:</span> bookmark<span class="op">.</span>title,</span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">description:</span> bookmark<span class="op">.</span>description,</span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">url:</span> bookmark<span class="op">.</span>url,</span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>        <span class="va">public:</span> bookmark<span class="op">.</span>public,</span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>        <span class="va">inserted_at:</span> bookmark<span class="op">.</span>inserted_at</span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>      <span class="fu">}</span>,</span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>      <span class="va">message:</span> <span class="st">&quot;Bookmark created successfully&quot;</span></span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a>    conn</span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> put_status<span class="fu">(</span><span class="va">:created</span><span class="fu">)</span></span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> json<span class="fu">(</span>%<span class="fu">{</span><span class="va">bookmark:</span> resp<span class="fu">})</span></span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-29"><a href="#cb20-29" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Add a fallback for invalid params</span></span>
+<span id="cb20-30"><a href="#cb20-30" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> create<span class="fu">(</span>conn, _params<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb20-31"><a href="#cb20-31" aria-hidden="true" tabindex="-1"></a>    conn</span>
+<span id="cb20-32"><a href="#cb20-32" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> put_status<span class="fu">(</span><span class="va">:bad_request</span><span class="fu">)</span></span>
+<span id="cb20-33"><a href="#cb20-33" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> json<span class="fu">(</span>%<span class="fu">{</span><span class="va">error:</span> <span class="st">&quot;Invalid parameters. Expected &#39;bookmark&#39; object in request body&quot;</span><span class="fu">})</span></span>
+<span id="cb20-34"><a href="#cb20-34" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb20-35"><a href="#cb20-35" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>This is about as simple as phoenix can get, we are just taking the
+shape of the data being sent from the chrome extension and then creating
+a bookmark. And it will work fine with <code>curl</code> or whatever
+else too.</p>
+<p>Next, we add a route to the router.</p>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Router</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  scope <span class="st">&quot;/api&quot;</span>, <span class="cn">NastyCloneWeb</span><span class="op">.</span><span class="cn">Api</span> <span class="kw">do</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    pipe_through <span class="va">:api</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    resources <span class="st">&quot;/bookmarks&quot;</span>, <span class="cn">BookmarkController</span>, <span class="va">only:</span> <span class="ot">[</span><span class="va">:create</span><span class="ot">]</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span></code></pre></div>
+<h4 id="commit-c76ca38af883ca71b7195c1387a72130d5936d53">Commit
+c76ca38af883ca71b7195c1387a72130d5936d53</h4>
+<p>So now we have a pretty fully functioning system. It can create
+bookmarks and pushes all this out to the firehose, and we have a cache
+we can serve a web app from. We also have the tags system for soon
+creating multiple types of feeds. We are backing everything in postgres
+so we can load the prior cache state pretty easily.</p>
+<p>Restart your server, and give this a shot:</p>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-X</span> POST http://localhost:4000/api/bookmarks <span class="dt">\</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&quot;Content-Type: application/json&quot;</span> <span class="dt">\</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="st">    &quot;bookmark&quot;: {</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="st">      &quot;title&quot;: &quot;Example Site&quot;,</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="st">      &quot;description&quot;: &quot;An example bookmark&quot;,</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="st">      &quot;url&quot;: &quot;https://example.com&quot;,</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="st">      &quot;public&quot;: true,</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="st">      &quot;tags&quot;: [&quot;example&quot;, &quot;test&quot;]</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="st">    }</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="st">  }&#39;</span></span></code></pre></div>
+<p>Next, we kind of hand wave away building a Chrome extension. It’s
+super simple and you can skip it and just follow the advice in line 2 of
+the section.</p>
+<h2 id="traffic">Traffic</h2>
+<p>Now, for this to be interesting, we need to simulate some traffic to
+consume this firehose feed, and we need to have some clients active to
+see any of this happening.</p>
+<p>We will quickly make a python client to listen to the firehose, and
+then we will also make a GenServer that will create bookmarks as if it
+were an API request as well.</p>
+<p>We will wrap this all up to run alongside the system if an
+environment variable is set, and if so start creating fake traffic.</p>
+<p>The only interesting thing we do here is start this up with the
+application at boot. We will see this after we look over this code for
+the simulator. The simulator itself just sends itself a message every 2
+seconds to queue up sending another bookmark.</p>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">defmodule</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Simulator</span> <span class="kw">do</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="im">use</span> <span class="cn">GenServer</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="im">require</span> <span class="cn">Logger</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="im">alias</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@interval</span> <span class="dv">2_000</span> <span class="co"># 2 seconds between bookmarks = ~30 per minute</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@adjectives</span> <span class="op">~</span>w<span class="fu">(</span><span class="cn">Amazing</span> <span class="cn">Brilliant</span> <span class="cn">Clever</span> <span class="cn">Dynamic</span> <span class="cn">Elegant</span> <span class="cn">Fantastic</span> <span class="cn">Great</span> <span class="cn">Helpful</span> <span class="cn">Innovative</span> <span class="cn">Joyful</span><span class="fu">)</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@nouns</span> <span class="op">~</span>w<span class="fu">(</span><span class="cn">Tutorial</span> <span class="cn">Guide</span> <span class="cn">Project</span> <span class="cn">Framework</span> <span class="cn">Library</span> <span class="cn">Tool</span> <span class="cn">Resource</span> <span class="cn">Platform</span> <span class="cn">Service</span> <span class="cn">Application</span><span class="fu">)</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@topics</span> <span class="op">~</span>w<span class="fu">(</span><span class="cn">Elixir</span> <span class="cn">Phoenix</span> <span class="cn">JavaScript</span> <span class="cn">React</span> <span class="cn">Vue</span> <span class="cn">Angular</span> <span class="cn">Ruby</span> <span class="cn">Python</span> <span class="cn">Go</span> <span class="cn">Rust</span><span class="fu">)</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> start_link<span class="fu">(</span>_<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>    <span class="cn">GenServer</span><span class="op">.</span>start_link<span class="fu">(</span><span class="cn">__MODULE__</span>, <span class="ot">[]</span>, <span class="va">name:</span> <span class="cn">__MODULE__</span><span class="fu">)</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@impl</span> <span class="cn">true</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> init<span class="fu">(</span>_<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>    schedule_next_bookmark<span class="fu">()</span></span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:ok</span>, %<span class="fu">{</span><span class="va">count:</span> <span class="dv">0</span><span class="fu">}}</span></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>  <span class="co"># make it use the link generator above...</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>  <span class="ot">@impl</span> <span class="cn">true</span></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> handle_info<span class="fu">(</span><span class="va">:create_bookmark</span>, state<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>    create_random_bookmark<span class="fu">()</span></span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>    schedule_next_bookmark<span class="fu">()</span></span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span><span class="va">:noreply</span>, %<span class="fu">{</span>state <span class="op">|</span> <span class="va">count:</span> state<span class="op">.</span>count <span class="op">+</span> <span class="dv">1</span><span class="fu">}}</span></span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a>  <span class="kw">defp</span> schedule_next_bookmark <span class="kw">do</span></span>
+<span id="cb23-30"><a href="#cb23-30" aria-hidden="true" tabindex="-1"></a>    <span class="cn">Process</span><span class="op">.</span>send_after<span class="fu">(</span>self<span class="fu">()</span>, <span class="va">:create_bookmark</span>, <span class="ot">@interval</span><span class="fu">)</span></span>
+<span id="cb23-31"><a href="#cb23-31" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb23-32"><a href="#cb23-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-33"><a href="#cb23-33" aria-hidden="true" tabindex="-1"></a>  <span class="kw">defp</span> create_random_bookmark <span class="kw">do</span></span>
+<span id="cb23-34"><a href="#cb23-34" aria-hidden="true" tabindex="-1"></a>    <span class="cn">LinkGenerator</span></span>
+<span id="cb23-35"><a href="#cb23-35" aria-hidden="true" tabindex="-1"></a>    adjective <span class="op">=</span> <span class="cn">Enum</span><span class="op">.</span>random<span class="fu">(</span><span class="ot">@adjectives</span><span class="fu">)</span></span>
+<span id="cb23-36"><a href="#cb23-36" aria-hidden="true" tabindex="-1"></a>    noun <span class="op">=</span> <span class="cn">Enum</span><span class="op">.</span>random<span class="fu">(</span><span class="ot">@nouns</span><span class="fu">)</span></span>
+<span id="cb23-37"><a href="#cb23-37" aria-hidden="true" tabindex="-1"></a>    topic <span class="op">=</span> <span class="cn">Enum</span><span class="op">.</span>random<span class="fu">(</span><span class="ot">@topics</span><span class="fu">)</span></span>
+<span id="cb23-38"><a href="#cb23-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-39"><a href="#cb23-39" aria-hidden="true" tabindex="-1"></a>    title <span class="op">=</span> <span class="st">&quot;</span><span class="ot">#{</span>adjective<span class="ot">}</span><span class="st"> </span><span class="ot">#{</span>topic<span class="ot">}</span><span class="st"> </span><span class="ot">#{</span>noun<span class="ot">}</span><span class="st">&quot;</span></span>
+<span id="cb23-40"><a href="#cb23-40" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">&quot;A </span><span class="ot">#{</span><span class="cn">String</span><span class="op">.</span>downcase<span class="fu">(</span>adjective<span class="fu">)</span><span class="ot">}</span><span class="st"> </span><span class="ot">#{</span><span class="cn">String</span><span class="op">.</span>downcase<span class="fu">(</span>noun<span class="fu">)</span><span class="ot">}</span><span class="st"> for </span><span class="ot">#{</span>topic<span class="ot">}</span><span class="st"> developers&quot;</span></span>
+<span id="cb23-41"><a href="#cb23-41" aria-hidden="true" tabindex="-1"></a>    url <span class="op">=</span> generate_url<span class="fu">(</span>title<span class="fu">)</span></span>
+<span id="cb23-42"><a href="#cb23-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-43"><a href="#cb23-43" aria-hidden="true" tabindex="-1"></a>    bookmark_params <span class="op">=</span> %<span class="fu">{</span></span>
+<span id="cb23-44"><a href="#cb23-44" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;title&quot;</span> <span class="op">=&gt;</span> title,</span>
+<span id="cb23-45"><a href="#cb23-45" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;description&quot;</span> <span class="op">=&gt;</span> description,</span>
+<span id="cb23-46"><a href="#cb23-46" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;url&quot;</span> <span class="op">=&gt;</span> url,</span>
+<span id="cb23-47"><a href="#cb23-47" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;public&quot;</span> <span class="op">=&gt;</span> <span class="cn">true</span></span>
+<span id="cb23-48"><a href="#cb23-48" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb23-49"><a href="#cb23-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-50"><a href="#cb23-50" aria-hidden="true" tabindex="-1"></a>    tags <span class="op">=</span> <span class="ot">[</span>topic, <span class="cn">String</span><span class="op">.</span>downcase<span class="fu">(</span>noun<span class="fu">)</span><span class="ot">]</span></span>
+<span id="cb23-51"><a href="#cb23-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-52"><a href="#cb23-52" aria-hidden="true" tabindex="-1"></a>    <span class="kw">case</span> <span class="cn">Bookmarks</span><span class="op">.</span>create<span class="fu">(</span>bookmark_params, tags<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb23-53"><a href="#cb23-53" aria-hidden="true" tabindex="-1"></a>      %<span class="fu">{</span><span class="va">id:</span> id<span class="fu">}</span> <span class="op">-&gt;</span></span>
+<span id="cb23-54"><a href="#cb23-54" aria-hidden="true" tabindex="-1"></a>        <span class="cn">Logger</span><span class="op">.</span>info<span class="fu">(</span><span class="st">&quot;Created simulated bookmark: </span><span class="ot">#{</span>title<span class="ot">}</span><span class="st"> (ID: </span><span class="ot">#{</span>id<span class="ot">}</span><span class="st">)&quot;</span><span class="fu">)</span></span>
+<span id="cb23-55"><a href="#cb23-55" aria-hidden="true" tabindex="-1"></a>      _ <span class="op">-&gt;</span></span>
+<span id="cb23-56"><a href="#cb23-56" aria-hidden="true" tabindex="-1"></a>        <span class="cn">Logger</span><span class="op">.</span>error<span class="fu">(</span><span class="st">&quot;Failed to create simulated bookmark: </span><span class="ot">#{</span>title<span class="ot">}</span><span class="st">&quot;</span><span class="fu">)</span></span>
+<span id="cb23-57"><a href="#cb23-57" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb23-58"><a href="#cb23-58" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb23-59"><a href="#cb23-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-60"><a href="#cb23-60" aria-hidden="true" tabindex="-1"></a>  <span class="kw">defp</span> generate_url<span class="fu">(</span>title<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb23-61"><a href="#cb23-61" aria-hidden="true" tabindex="-1"></a>    slug <span class="op">=</span> title</span>
+<span id="cb23-62"><a href="#cb23-62" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> <span class="cn">String</span><span class="op">.</span>downcase<span class="fu">()</span></span>
+<span id="cb23-63"><a href="#cb23-63" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> <span class="cn">String</span><span class="op">.</span>replace<span class="fu">(</span><span class="op">~</span>r<span class="op">/</span><span class="ot">[</span><span class="op">^</span>a<span class="op">-</span>z0<span class="dv">-9</span>\s<span class="ot">]</span><span class="op">/</span>, <span class="st">&quot;&quot;</span><span class="fu">)</span></span>
+<span id="cb23-64"><a href="#cb23-64" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> <span class="cn">String</span><span class="op">.</span>replace<span class="fu">(</span><span class="op">~</span>r<span class="op">/</span>\s<span class="op">+/</span>, <span class="st">&quot;-&quot;</span><span class="fu">)</span></span>
+<span id="cb23-65"><a href="#cb23-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-66"><a href="#cb23-66" aria-hidden="true" tabindex="-1"></a>    domains <span class="op">=</span> <span class="ot">[</span></span>
+<span id="cb23-67"><a href="#cb23-67" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;example.com&quot;</span>,</span>
+<span id="cb23-68"><a href="#cb23-68" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;tutorial-site.dev&quot;</span>,</span>
+<span id="cb23-69"><a href="#cb23-69" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;learn-tech.io&quot;</span>,</span>
+<span id="cb23-70"><a href="#cb23-70" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;codebase.edu&quot;</span>,</span>
+<span id="cb23-71"><a href="#cb23-71" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;dev-resources.net&quot;</span></span>
+<span id="cb23-72"><a href="#cb23-72" aria-hidden="true" tabindex="-1"></a>    <span class="ot">]</span></span>
+<span id="cb23-73"><a href="#cb23-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-74"><a href="#cb23-74" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;https://</span><span class="ot">#{</span><span class="cn">Enum</span><span class="op">.</span>random<span class="fu">(</span>domains<span class="fu">)</span><span class="ot">}</span><span class="st">/</span><span class="ot">#{</span>slug<span class="ot">}</span><span class="st">&quot;</span></span>
+<span id="cb23-75"><a href="#cb23-75" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb23-76"><a href="#cb23-76" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>If you are new to GenServers, this ones a great example of how we can
+have such nice tools out of the box. We have had quite a few more
+complicated ones, but this gets us a nice thing out of the box:
+recurring task running.</p>
+<p>Now, we start it up in <code>application.ex</code></p>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode elixir"><code class="sourceCode elixir"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>  <span class="co"># snip</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">def</span> start<span class="fu">(</span>_type, _args<span class="fu">)</span> <span class="kw">do</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>    children <span class="op">=</span> <span class="ot">[</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>      <span class="cn">NastyCloneWeb</span><span class="op">.</span><span class="cn">Telemetry</span>,</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>      <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Repo</span>,</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span><span class="cn">DNSCluster</span>, <span class="va">query:</span> <span class="cn">Application</span><span class="op">.</span>get_env<span class="fu">(</span><span class="va">:nasty_clone</span>, <span class="va">:dns_cluster_query</span><span class="fu">)</span> <span class="op">||</span> <span class="va">:ignore</span><span class="fu">}</span>,</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span><span class="cn">Phoenix</span><span class="op">.</span><span class="cn">PubSub</span>, <span class="va">name:</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">PubSub</span><span class="fu">}</span>,</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Start the Finch HTTP client for sending emails</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span><span class="cn">Finch</span>, <span class="va">name:</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Finch</span><span class="fu">}</span>,</span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Start a worker by calling: NastyClone.Worker.start_link(arg)</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>      <span class="co"># {NastyClone.Worker, arg},</span></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Start to serve requests, typically the last entry</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>      <span class="cn">NastyCloneWeb</span><span class="op">.</span><span class="cn">Endpoint</span>,</span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>      <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Cache</span>,</span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>      <span class="co"># our new line, the simulator</span></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>      <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Bookmarks</span><span class="op">.</span><span class="cn">Simulator</span></span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>    <span class="ot">]</span></span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># See https://hexdocs.pm/elixir/Supervisor.html</span></span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>    <span class="co"># for other strategies and supported options</span></span>
+<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a>    opts <span class="op">=</span> <span class="ot">[</span><span class="va">strategy:</span> <span class="va">:one_for_one</span>, <span class="va">name:</span> <span class="cn">NastyClone</span><span class="op">.</span><span class="cn">Supervisor</span><span class="ot">]</span></span>
+<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a>    <span class="cn">Supervisor</span><span class="op">.</span>start_link<span class="fu">(</span>children, opts<span class="fu">)</span></span>
+<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>  <span class="kw">end</span></span>
+<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a>  <span class="co"># snip</span></span></code></pre></div>
+<p>With this, we will start seeing entries coming across the channel
+regularly.</p>
+<p><em>Soon, we will see all of this come together quite gracefully, I
+promise.</em></p>
+<h4 id="commit-abcd">Commit ABCD</h4>
+<h2 id="a-liveview-showing-the-link-feed">A LiveView Showing the Link
+Feed</h2>
+<p>Finally, let’s view all these links that are coming across the wire.
+This is where we get to see LiveView in action.</p>
+<h2 id="sewing-tags-into-all-of-this">Sewing tags into all of this</h2>
+<h2 id="filtered-by-tag-publishingtopic">Filtered By Tag
+Publishing/Topic</h2>
+<p>You might be saying, “we dont have tags yet”, but we are going to
+after we make this channel. ## Chrome Extension We’re going to handwave
+most of this away, because its not the point of the guide.</p>
+<p>In short, here is a <a
+href="https://github.com/robertgrayson/nasty_chrome_extension">chrome
+extension</a> that we can use to create bookmarks.</p>
+<p>Here is a super brief guide of the code.</p>
+<p>We have a <code>popup.html</code> that is the UI of the
+extension.</p>
+<p>We have <code>popup.js</code> that is the logic of the extension to
+submit the form and send the data to our API endpoint.</p>
+<p>And finally we have <code>manifest.json</code> that is the metadata
+of the extension.</p>
+<p>Now, you can throw this directory wherever you want. But to load it,
+enable developer mode in Chrome and guide it to the directory.</p>
+<p>The popup is mostly styles, the real meat is the input form:</p>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode html"><code class="sourceCode html"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>   <span class="dt">&lt;</span><span class="kw">form</span> <span class="er">id</span><span class="ot">=</span><span class="st">&quot;bookmarkForm&quot;</span><span class="dt">&gt;</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>     <span class="dt">&lt;</span><span class="kw">input</span> <span class="er">type</span><span class="ot">=</span><span class="st">&quot;text&quot;</span> <span class="er">id</span><span class="ot">=</span><span class="st">&quot;title&quot;</span> <span class="er">placeholder</span><span class="ot">=</span><span class="st">&quot;Title&quot;</span> <span class="er">required</span><span class="dt">&gt;</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>     <span class="dt">&lt;</span><span class="kw">input</span> <span class="er">type</span><span class="ot">=</span><span class="st">&quot;text&quot;</span> <span class="er">id</span><span class="ot">=</span><span class="st">&quot;tags&quot;</span> <span class="er">placeholder</span><span class="ot">=</span><span class="st">&quot;Tags (comma separated)&quot;</span><span class="dt">&gt;</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>     <span class="dt">&lt;</span><span class="kw">textarea</span> <span class="er">id</span><span class="ot">=</span><span class="st">&quot;description&quot;</span> <span class="er">placeholder</span><span class="ot">=</span><span class="st">&quot;Description&quot;</span> <span class="er">rows</span><span class="ot">=</span><span class="st">&quot;3&quot;</span><span class="dt">&gt;&lt;/</span><span class="kw">textarea</span><span class="dt">&gt;</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>     <span class="dt">&lt;</span><span class="kw">button</span> <span class="er">type</span><span class="ot">=</span><span class="st">&quot;submit&quot;</span><span class="dt">&gt;</span>Save Bookmark<span class="dt">&lt;/</span><span class="kw">button</span><span class="dt">&gt;</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>   <span class="dt">&lt;/</span><span class="kw">form</span><span class="dt">&gt;</span></span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode javascript"><code class="sourceCode javascript"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="bu">document</span><span class="op">.</span><span class="fu">addEventListener</span>(<span class="st">&#39;DOMContentLoaded&#39;</span><span class="op">,</span> <span class="kw">function</span>() {</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>  <span class="co">// Get current tab URL</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>  chrome<span class="op">.</span><span class="at">tabs</span><span class="op">.</span><span class="fu">query</span>({<span class="dt">active</span><span class="op">:</span> <span class="kw">true</span><span class="op">,</span> <span class="dt">currentWindow</span><span class="op">:</span> <span class="kw">true</span>}<span class="op">,</span> <span class="kw">function</span>(tabs) {</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> currentTab <span class="op">=</span> tabs[<span class="dv">0</span>]<span class="op">;</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Pre-fill form with page details</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>    <span class="bu">document</span><span class="op">.</span><span class="fu">getElementById</span>(<span class="st">&#39;title&#39;</span>)<span class="op">.</span><span class="at">value</span> <span class="op">=</span> currentTab<span class="op">.</span><span class="at">title</span> <span class="op">||</span> <span class="st">&#39;&#39;</span><span class="op">;</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Handle form submission</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    <span class="bu">document</span><span class="op">.</span><span class="fu">getElementById</span>(<span class="st">&#39;bookmarkForm&#39;</span>)<span class="op">.</span><span class="fu">addEventListener</span>(<span class="st">&#39;submit&#39;</span><span class="op">,</span> <span class="kw">function</span>(e) {</span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>      e<span class="op">.</span><span class="fu">preventDefault</span>()<span class="op">;</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>      <span class="kw">const</span> bookmark <span class="op">=</span> {</span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>        <span class="dt">title</span><span class="op">:</span> <span class="bu">document</span><span class="op">.</span><span class="fu">getElementById</span>(<span class="st">&#39;title&#39;</span>)<span class="op">.</span><span class="at">value</span><span class="op">,</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>        <span class="dt">url</span><span class="op">:</span> currentTab<span class="op">.</span><span class="at">url</span><span class="op">,</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>        <span class="dt">description</span><span class="op">:</span> <span class="bu">document</span><span class="op">.</span><span class="fu">getElementById</span>(<span class="st">&#39;description&#39;</span>)<span class="op">.</span><span class="at">value</span><span class="op">,</span></span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>        <span class="dt">tags</span><span class="op">:</span> <span class="bu">document</span><span class="op">.</span><span class="fu">getElementById</span>(<span class="st">&#39;tags&#39;</span>)<span class="op">.</span><span class="at">value</span><span class="op">,</span></span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>        <span class="dt">public</span><span class="op">:</span> <span class="kw">true</span></span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a>      }<span class="op">;</span></span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>      <span class="fu">saveBookmark</span>(bookmark)<span class="op">;</span></span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a>    })<span class="op">;</span></span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a>  })<span class="op">;</span></span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>})<span class="op">;</span></span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a><span class="kw">async</span> <span class="kw">function</span> <span class="fu">saveBookmark</span>(bookmark) {</span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> statusDiv <span class="op">=</span> <span class="bu">document</span><span class="op">.</span><span class="fu">getElementById</span>(<span class="st">&#39;status&#39;</span>)<span class="op">;</span></span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>  <span class="cf">try</span> {</span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> response <span class="op">=</span> <span class="cf">await</span> <span class="fu">fetch</span>(<span class="st">&#39;http://localhost:4000/api/bookmarks&#39;</span><span class="op">,</span> {</span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>      <span class="dt">method</span><span class="op">:</span> <span class="st">&#39;POST&#39;</span><span class="op">,</span></span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a>      <span class="dt">headers</span><span class="op">:</span> {</span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a>        <span class="st">&#39;Content-Type&#39;</span><span class="op">:</span> <span class="st">&#39;application/json&#39;</span><span class="op">,</span></span>
+<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a>        <span class="st">&#39;Accept&#39;</span><span class="op">:</span> <span class="st">&#39;application/json&#39;</span></span>
+<span id="cb26-33"><a href="#cb26-33" aria-hidden="true" tabindex="-1"></a>      }<span class="op">,</span></span>
+<span id="cb26-34"><a href="#cb26-34" aria-hidden="true" tabindex="-1"></a>      <span class="dt">body</span><span class="op">:</span> <span class="bu">JSON</span><span class="op">.</span><span class="fu">stringify</span>({ bookmark })<span class="op">,</span></span>
+<span id="cb26-35"><a href="#cb26-35" aria-hidden="true" tabindex="-1"></a>    })<span class="op">;</span></span>
+<span id="cb26-36"><a href="#cb26-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-37"><a href="#cb26-37" aria-hidden="true" tabindex="-1"></a>    <span class="kw">const</span> responseText <span class="op">=</span> <span class="cf">await</span> response<span class="op">.</span><span class="fu">text</span>()<span class="op">;</span></span>
+<span id="cb26-38"><a href="#cb26-38" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> data<span class="op">;</span></span>
+<span id="cb26-39"><a href="#cb26-39" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span> {</span>
+<span id="cb26-40"><a href="#cb26-40" aria-hidden="true" tabindex="-1"></a>      data <span class="op">=</span> <span class="bu">JSON</span><span class="op">.</span><span class="fu">parse</span>(responseText)<span class="op">;</span></span>
+<span id="cb26-41"><a href="#cb26-41" aria-hidden="true" tabindex="-1"></a>    } <span class="cf">catch</span> (e) {</span>
+<span id="cb26-42"><a href="#cb26-42" aria-hidden="true" tabindex="-1"></a>      <span class="bu">console</span><span class="op">.</span><span class="fu">error</span>(<span class="st">&#39;Failed to parse response as JSON:&#39;</span><span class="op">,</span> e)<span class="op">;</span></span>
+<span id="cb26-43"><a href="#cb26-43" aria-hidden="true" tabindex="-1"></a>      <span class="cf">throw</span> <span class="kw">new</span> <span class="bu">Error</span>(<span class="st">&#39;Server returned invalid JSON&#39;</span>)<span class="op">;</span></span>
+<span id="cb26-44"><a href="#cb26-44" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb26-45"><a href="#cb26-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-46"><a href="#cb26-46" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="op">!</span>response<span class="op">.</span><span class="at">ok</span>) {</span>
+<span id="cb26-47"><a href="#cb26-47" aria-hidden="true" tabindex="-1"></a>      <span class="bu">console</span><span class="op">.</span><span class="fu">error</span>(<span class="st">&#39;Error response:&#39;</span><span class="op">,</span> data)<span class="op">;</span></span>
+<span id="cb26-48"><a href="#cb26-48" aria-hidden="true" tabindex="-1"></a>      <span class="cf">throw</span> <span class="kw">new</span> <span class="bu">Error</span>(<span class="bu">JSON</span><span class="op">.</span><span class="fu">stringify</span>(data<span class="op">.</span><span class="at">errors</span> <span class="op">||</span> data<span class="op">.</span><span class="at">error</span> <span class="op">||</span> <span class="st">&#39;Unknown error&#39;</span>))<span class="op">;</span></span>
+<span id="cb26-49"><a href="#cb26-49" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb26-50"><a href="#cb26-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-51"><a href="#cb26-51" aria-hidden="true" tabindex="-1"></a>    statusDiv<span class="op">.</span><span class="at">style</span><span class="op">.</span><span class="at">color</span> <span class="op">=</span> <span class="st">&#39;#00ff00&#39;</span><span class="op">;</span></span>
+<span id="cb26-52"><a href="#cb26-52" aria-hidden="true" tabindex="-1"></a>    statusDiv<span class="op">.</span><span class="at">textContent</span> <span class="op">=</span> <span class="st">&#39;Bookmark saved!&#39;</span><span class="op">;</span></span>
+<span id="cb26-53"><a href="#cb26-53" aria-hidden="true" tabindex="-1"></a>    <span class="pp">setTimeout</span>(() <span class="kw">=&gt;</span> <span class="bu">window</span><span class="op">.</span><span class="fu">close</span>()<span class="op">,</span> <span class="dv">3000</span>)<span class="op">;</span></span>
+<span id="cb26-54"><a href="#cb26-54" aria-hidden="true" tabindex="-1"></a>  } <span class="cf">catch</span> (error) {</span>
+<span id="cb26-55"><a href="#cb26-55" aria-hidden="true" tabindex="-1"></a>    <span class="bu">console</span><span class="op">.</span><span class="fu">error</span>(<span class="st">&#39;Error:&#39;</span><span class="op">,</span> error)<span class="op">;</span></span>
+<span id="cb26-56"><a href="#cb26-56" aria-hidden="true" tabindex="-1"></a>    statusDiv<span class="op">.</span><span class="at">textContent</span> <span class="op">=</span> <span class="vs">`Error: </span><span class="sc">${</span>error<span class="op">.</span><span class="at">message</span><span class="sc">}</span><span class="vs">`</span><span class="op">;</span></span>
+<span id="cb26-57"><a href="#cb26-57" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb26-58"><a href="#cb26-58" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<h2 id="final-features-reflections">Final Features, Reflections</h2>
